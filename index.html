@@ -20,7 +20,7 @@
   .grid{display:grid; grid-template-columns: 1.05fr .95fr; gap:16px}
   @media (max-width:1100px){ .grid{grid-template-columns:1fr} }
   .card{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow)}
-  .card .hd{padding:14px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between}
+  .card .hd{padding:14px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:12px}
   .card .bd{padding:16px}
   .h2{font-size:16px; font-weight:800; margin:0}
   .muted{color:var(--muted)}
@@ -113,7 +113,7 @@
             <select id="contractorSelect"><option value="">Loading…</option></select>
           </div>
           <div class="col-3">
-            <label>Initial Qty</label>
+            <label>Initial Capacity</label>
             <input id="qtyInput" type="text" placeholder="e.g., 2" />
           </div>
           <div class="col-3" style="display:flex; align-items:flex-end;">
@@ -128,10 +128,11 @@
 
         <div class="row">
           <div class="col-12">
-            <div style="display:flex; gap:12px; align-items:center; justify-content:space-between">
-              <div class="stack">
+            <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap">
+              <div class="stack" style="display:flex; gap:10px; flex-wrap:wrap;">
                 <button id="runBtn" class="btn primary">Run Optimization</button>
                 <button id="resetBtn" class="btn">Reset</button>
+                <button id="autofillBtn" class="btn">Auto-fill remaining</button>
               </div>
               <div style="min-width:260px;">
                 <div class="progress" aria-label="Optimization progress">
@@ -150,7 +151,7 @@
     <section class="card">
       <div class="hd">
         <div class="h2">Executive Overview</div>
-        <div class="stack">
+        <div class="stack" style="display:flex; gap:10px; flex-wrap:wrap;">
           <button id="dlOptimized" class="btn" disabled>Download Optimized</button>
           <button id="dlSummary" class="btn" disabled>Download Summary</button>
           <button id="dlUnassignable" class="btn" disabled>Download Unassignable</button>
@@ -404,10 +405,9 @@ function updateCapacity(name, newCap){
   // If over capacity, spill furthest tasks to Unassigned
   const set = state.assignments.get(name) || new Set();
   if(set.size > newCap){
-    // rank tasks by distance descending (furthest first)
     const tasks = [...set].map(id => state.tasks.find(t=>t.id===id)).filter(Boolean);
     tasks.sort((a,b)=> (b.distanceMeters||0) - (a.distanceMeters||0));
-    const overflow = tasks.slice(newCap); // how many to remove
+    const overflow = tasks.slice(newCap);
     const un = state.assignments.get('Unassigned') || new Set(); state.assignments.set('Unassigned', un);
     overflow.forEach(t=>{
       set.delete(t.id);
@@ -416,15 +416,14 @@ function updateCapacity(name, newCap){
     });
   }
   renderBoard();
-  renderTables(); // refresh tables/summary
-  renderChart();
+  renderTables(); renderChart();
   document.getElementById('kpiAssigned').textContent=String(state.tasks.filter(x=>x.assignedTo).length);
 }
 
-/* ===== RENDER UI PIECES ===== */
+/* ===== UI PIECES ===== */
 function chipHTML(name, cap){
-  const {used, pct} = capacityInfo(name);
-  const maxSlider = Math.max(cap, used, 20); // reasonable headroom
+  const {used} = capacityInfo(name);
+  const maxSlider = Math.max(cap, used, 20);
   return `
     <div class="chip" data-chip="${name}">
       <div>
@@ -434,7 +433,7 @@ function chipHTML(name, cap){
           <input type="range" min="0" max="${maxSlider}" step="1" value="${cap}" data-slider="${name}" />
           <output data-out="${name}">${cap}</output>
         </div>
-        <div class="muted" style="font-size:12px; margin-top:6px;">Used: ${used}/${cap} (${cap>0?Math.round((used/cap)*100):0}%)</div>
+        <div class="muted" style="font-size:12px; margin-top:6px;">Used: ${(state.assignments.get(name)?.size)||0}/${cap} (${cap>0?Math.round((((state.assignments.get(name)?.size)||0)/cap)*100):0}%)</div>
       </div>
       <div class="right">
         <button class="btn" data-remove="${name}" title="Remove">✕</button>
@@ -445,10 +444,8 @@ function chipHTML(name, cap){
 function renderRouteChips(){
   const wrap=document.getElementById('selectedWrap'); wrap.innerHTML='';
   for(const [name, cap] of state.routeSelections.entries()){
-    const div=document.createElement('div');
-    div.innerHTML=chipHTML(name, cap);
-    const node=div.firstElementChild;
-    wrap.appendChild(node);
+    const div=document.createElement('div'); div.innerHTML=chipHTML(name, cap);
+    wrap.appendChild(div.firstElementChild);
   }
   // wire sliders & remove
   wrap.querySelectorAll('input[type="range"][data-slider]').forEach(sl=>{
@@ -467,7 +464,6 @@ function renderRouteChips(){
   wrap.querySelectorAll('button[data-remove]').forEach(btn=>{
     btn.onclick=()=>{
       const name=btn.getAttribute('data-remove');
-      // move tasks back to Unassigned
       const set = state.assignments.get(name) || new Set();
       const un = state.assignments.get('Unassigned') || new Set(); state.assignments.set('Unassigned', un);
       [...set].forEach(id=>{
@@ -531,13 +527,10 @@ function renderBoard(){
     const lane = [...board.querySelectorAll('.lane')].find(l=>l.getAttribute('data-contractor')===laneName);
     lane.querySelector('.lane-body').insertAdjacentHTML('beforeend', taskCardHTML(t));
   };
-  // Build lane sets default
   if(!state.assignments.has('Unassigned')) state.assignments.set('Unassigned', new Set());
-  // Ensure every selected contractor has a set
   for(const [n] of state.routeSelections.entries()){
     if(!state.assignments.has(n)) state.assignments.set(n,new Set());
   }
-  // Place tasks per assignments
   for(const t of state.tasks){
     const laneName = t.assignedTo ?? 'Unassigned';
     placeInLane(laneName, t);
@@ -571,14 +564,12 @@ async function moveTask(taskId, toName){
     if(used >= cap){ alert(`Capacity reached for ${toName}`); return; }
   }
 
-  // Remove from source
   const fromSet = state.assignments.get(fromName) || new Set(); fromSet.delete(taskId);
 
   if(toName === 'Unassigned'){
     t.assignedTo = undefined;
     const un = state.assignments.get('Unassigned') || new Set(); un.add(taskId); state.assignments.set('Unassigned', un);
   } else {
-    // Recompute distance for new pairing
     const meta=state.contractorMeta.get(toName)||{};
     const dm=await getDistanceAndDuration(meta.homeAddress||'', t.lat, t.lng);
     if(dm){ t.distanceMeters=dm.distanceMeters; t.durationSeconds=dm.durationSeconds; }
@@ -596,7 +587,6 @@ function nextId(){ return 't_'+Math.random().toString(36).slice(2,9); }
 async function runOptimization(){
   try{
     setStatus('Optimizing…'); setProgress(0); state.dmCalls=0;
-    // Reset containers but keep route selections
     state.tasks=[]; state.assignments.clear(); state.capacities.clear(); state.contractorMeta.clear();
 
     const citySel=document.getElementById('citySelect').value.trim().toLowerCase();
@@ -673,7 +663,7 @@ async function runOptimization(){
     document.getElementById('pillDay').textContent=(daySel==='today'?'Today':'Tomorrow');
     document.getElementById('pillCalls').textContent=String(state.dmCalls);
 
-    renderBoard(); renderTables(unassign); renderChart();
+    renderBoard(); renderRouteChips(); renderTables(unassign); renderChart();
 
     // Downloads enable
     document.getElementById('dlOptimized').disabled=false;
@@ -748,7 +738,73 @@ function renderChart(){
   });
 }
 
-/* ===== UI WIRING ===== */
+/* ===== AUTO-FILL REMAINING ===== */
+async function autoFillRemaining(){
+  try{
+    setStatus('Auto-filling…'); setProgress(0);
+    const un = state.assignments.get('Unassigned') || new Set();
+    if (un.size === 0) { setStatus('Nothing to auto-fill.'); return; }
+
+    // Build contractors with remaining capacity
+    const roster = [];
+    for (const [name, cap] of state.capacities.entries()){
+      const used = (state.assignments.get(name)?.size) || 0;
+      const remaining = Math.max(0, cap - used);
+      if (remaining > 0){
+        roster.push({
+          name,
+          remaining,
+          homeAddress: (state.contractorMeta.get(name)||{}).homeAddress || ''
+        });
+      }
+    }
+    if (roster.length === 0){ setStatus('All contractors at capacity.'); return; }
+
+    const toPlace = [...un];
+    const total = toPlace.length;
+    let placed = 0;
+
+    for (let i=0; i<toPlace.length; i++){
+      if (roster.every(r => r.remaining === 0)) break;
+
+      const id = toPlace[i];
+      const t = state.tasks.find(x => x.id === id);
+      if (!t) continue;
+
+      let best = null, bestDist = Number.POSITIVE_INFINITY, bestDur = 0;
+      for (const r of roster){
+        if (r.remaining <= 0) continue;
+        const dm = await getDistanceAndDuration(r.homeAddress, t.lat, t.lng);
+        const d  = dm?.distanceMeters ?? Number.POSITIVE_INFINITY;
+        if (d < bestDist){
+          best = r; bestDist = d; bestDur = dm?.durationSeconds || 0;
+        }
+      }
+
+      if (best && isFinite(bestDist)){
+        un.delete(id);
+        const set = state.assignments.get(best.name) || new Set();
+        set.add(id); state.assignments.set(best.name, set);
+        t.assignedTo = best.name; t.distanceMeters = bestDist; t.durationSeconds = bestDur;
+        best.remaining--;
+        placed++;
+      }
+
+      setProgress(((i+1)/total)*100);
+    }
+
+    // Refresh UI
+    renderBoard(); renderTables(); renderChart();
+    document.getElementById('kpiAssigned').textContent = String(state.tasks.filter(x=>x.assignedTo).length);
+    document.getElementById('pillCalls').textContent = String(state.dmCalls);
+    setStatus(placed ? `Auto-filled ${placed} task${placed===1?'':'s'}.` : 'No tasks were auto-filled.');
+  } catch (e){
+    console.error(e);
+    setStatus('Error: '+e.message);
+  }
+}
+
+/* ===== WIRING ===== */
 document.getElementById('addBtn').onclick=()=>{
   const name=document.getElementById('contractorSelect').value;
   const qty=parseInt(document.getElementById('qtyInput').value,10);
@@ -769,6 +825,7 @@ document.getElementById('resetBtn').onclick=()=>{
   setProgress(0); setStatus('Ready.');
 };
 document.getElementById('runBtn').onclick=()=>runOptimization();
+document.getElementById('autofillBtn').onclick=()=>autoFillRemaining();
 document.getElementById('pubhtmlUrl').addEventListener('change', ()=>bootstrap());
 window.addEventListener('load', ()=>bootstrap());
 </script>
