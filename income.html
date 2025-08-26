@@ -3,679 +3,415 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Income / Outcome Dashboard</title>
-  <!-- Tailwind via CDN -->
+  <title>Income / Outcome Dashboard (Light)</title>
+
+  <!-- libs -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- Papa Parse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- light, high-contrast theme tokens -->
   <style>
-    /* Hide number input spinners (for some browsers) */
-    input[type=number]::-webkit-inner-spin-button, 
-    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    :root{
+      --brand:#2563eb; /* accent */
+      --bg:#ffffff;    /* page bg */
+      --card:#f8fafc;  /* card bg */
+      --text:#0f172a;  /* text */
+      --muted:#475569; /* secondary text */
+      --border:#e2e8f0;/* borders */
+    }
+    html,body{ background:var(--bg); color:var(--text); }
+    .brand-bg{ background:var(--brand)!important; color:#fff!important; border-color:var(--brand)!important; }
+    .brand-text{ color:var(--brand)!important; }
+    .card{ background:var(--card); border:1px solid var(--border); }
+    .btn{ border:1px solid var(--border); padding:.5rem .75rem; border-radius:.75rem; background:#fff; }
+    .btn:hover{ background:#f1f5f9; }
+    .btn-ghost{ background:transparent; }
+    .table thead{ background:#eef2f7; }
+    .chip{ border:1px solid var(--border); padding:.15rem .5rem; border-radius:999px; font-size:.75rem; }
+    .kbd{ border:1px solid var(--border); padding:0 .35rem; border-radius:.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:.75rem; color:var(--muted); }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
-  <header class="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-      <h1 class="text-2xl font-bold tracking-tight">💰 Income / Outcome Dashboard</h1>
-      <div class="flex items-center gap-2 text-sm">
-        <button id="aboutBtn" class="px-3 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">How to use</button>
-        <button id="resetBtn" class="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Reset</button>
-      </div>
-    </div>
-  </header>
-
+<body class="min-h-screen">
   <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
-    <!-- Links input -->
-    <section class="bg-white rounded-2xl shadow p-4">
-      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-        <div class="grow">
-          <label class="block text-sm font-medium mb-1" for="csvUrl">Published CSV link from Google Sheets</label>
-          <input id="csvUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv" class="w-full border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400" />
-          <p class="text-xs text-slate-500 mt-1">Tip: In Google Sheets → <em>File → Share → Publish to web</em> → select your tab → format: <strong>CSV</strong> → copy the link.</p>
+    <!-- Header -->
+    <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div class="flex items-center gap-2">
+        <div class="text-2xl">💰</div>
+        <h1 class="text-2xl font-semibold">Income / Outcome Dashboard</h1>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <label class="flex items-center gap-2">Accent <input id="brandColor" type="color" class="w-9 h-9 rounded-lg border border-slate-300" value="#2563eb"></label>
+        <button id="aboutBtn" class="btn">How to use</button>
+        <button id="resetBtn" class="btn">Reset</button>
+      </div>
+    </header>
+
+    <!-- Links -->
+    <section class="card rounded-2xl p-4">
+      <div class="grid md:grid-cols-12 gap-3 items-end">
+        <div class="md:col-span-7">
+          <label class="block text-sm mb-1">Google Sheets link (Published CSV or normal Sheet URL)</label>
+          <input id="csvUrl" type="url" placeholder="Paste /edit, /export?format=csv or /pub?output=csv" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
+          <p class="text-xs text-slate-500 mt-1">Works with <code>/pub?output=csv</code>, <code>/export?format=csv</code>, or a normal <code>/edit</code> URL (auto‑converted). Also supports multiple links.</p>
         </div>
-        <div class="flex gap-2">
-          <button id="addLinkBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Add link</button>
-          <button id="loadBtn" class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Load data</button>
+        <div class="md:col-span-5 grid grid-cols-2 md:grid-cols-4 gap-2">
+          <button id="addLinkBtn" class="btn brand-bg">Add link</button>
+          <button id="loadBtn" class="btn">Load data</button>
+          <button id="loadSampleBtn" class="btn">Sample</button>
+          <button id="refreshBtn" class="btn">Refresh</button>
         </div>
       </div>
-      <div id="linkList" class="mt-4 hidden">
-        <h3 class="font-semibold mb-2">Saved links</h3>
+      <div id="linkList" class="mt-3 hidden">
+        <div class="flex items-center justify-between mb-2"><h3 class="font-semibold">Saved links</h3><div class="text-xs text-slate-500">Tip: use <span class="kbd">?csv=URL1,URL2</span> in the page URL</div></div>
         <ul id="linksUl" class="grid md:grid-cols-2 gap-2"></ul>
       </div>
     </section>
 
-    <!-- Mapping & Settings -->
-    <section class="bg-white rounded-2xl shadow p-4">
+    <!-- Mapping & settings -->
+    <section class="card rounded-2xl p-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Column Mapping & Settings</h2>
-        <button id="remapBtn" class="text-sm px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">Auto‑detect</button>
-      </div>
-      <div class="grid md:grid-cols-5 gap-4 mt-4">
-        <div>
-          <label class="block text-sm font-medium mb-1">Date</label>
-          <select id="mapDate" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Description</label>
-          <select id="mapDesc" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Category</label>
-          <select id="mapCat" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Type (Income/Outcome)</label>
-          <select id="mapType" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Amount</label>
-          <select id="mapAmt" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        <h2 class="text-lg font-semibold">Column Mapping & Preferences</h2>
+        <div class="flex gap-2">
+          <button id="remapBtn" class="btn">Auto‑detect</button>
+          <button id="applyMappingBtn" class="btn">Apply</button>
         </div>
       </div>
-      <div class="grid md:grid-cols-4 gap-4 mt-4">
+      <div class="grid md:grid-cols-5 gap-3 mt-4">
+        <div><label class="block text-sm mb-1">Date</label><select id="mapDate" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select></div>
+        <div><label class="block text-sm mb-1">Description</label><select id="mapDesc" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select></div>
+        <div><label class="block text-sm mb-1">Category</label><select id="mapCat" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select></div>
+        <div><label class="block text-sm mb-1">Type (Income/Expense)</label><select id="mapType" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select></div>
+        <div><label class="block text-sm mb-1">Amount</label><select id="mapAmt" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select></div>
+      </div>
+      <div class="grid md:grid-cols-5 gap-3 mt-4">
         <div>
-          <label class="block text-sm font-medium mb-1">Currency</label>
+          <label class="block text-sm mb-1">Currency</label>
           <select id="currency" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
         </div>
         <div>
-          <label class="block text-sm font-medium mb-1">Locale (number format)</label>
+          <label class="block text-sm mb-1">Locale</label>
           <select id="locale" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
         </div>
-        <div class="flex items-end"><button id="saveSettingsBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 w-full">Save settings</button></div>
-        <div class="flex items-end"><button id="applyMappingBtn" class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 w-full">Apply mapping</button></div>
+        <div>
+          <label class="block text-sm mb-1">Rows per page</label>
+          <input id="rowsPerPage" type="number" min="10" step="10" value="50" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Starting Balance</label>
+          <input id="startingBalance" type="number" step="0.01" value="0" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Low Balance Threshold</label>
+          <input id="lowThreshold" type="number" step="0.01" value="100" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
+        </div>
+        <div class="md:col-span-5 flex items-end"><button id="saveSettingsBtn" class="btn brand-bg w-full">Save</button></div>
       </div>
+      <p class="mt-2 text-xs text-slate-500">Minimum required: <strong>Date</strong> & <strong>Amount</strong>. If <strong>Type</strong> is blank, it will be inferred from the Amount sign.</p>
     </section>
 
     <!-- Filters -->
-    <section class="bg-white rounded-2xl shadow p-4">
-      <div class="grid md:grid-cols-5 gap-4">
-        <div>
-          <label class="block text-sm font-medium mb-1">From</label>
-          <input id="fromDate" type="date" class="w-full border border-slate-300 rounded-xl px-3 py-2" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">To</label>
-          <input id="toDate" type="date" class="w-full border border-slate-300 rounded-xl px-3 py-2" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Type</label>
-          <select id="filterType" class="w-full border border-slate-300 rounded-xl px-3 py-2">
-            <option value="all">All</option>
-            <option value="income">Income</option>
-            <option value="expense">Expense</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Category</label>
-          <select id="filterCat" class="w-full border border-slate-300 rounded-xl px-3 py-2">
-            <option value="all">All</option>
-          </select>
-        </div>
-        <div class="flex items-end gap-2">
-          <button id="applyFiltersBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 w-full">Apply</button>
-        </div>
+    <section class="card rounded-2xl p-4">
+      <div class="grid md:grid-cols-6 gap-3 items-end">
+        <div><label class="block text-sm mb-1">From</label><input id="fromDate" type="date" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"/></div>
+        <div><label class="block text-sm mb-1">To</label><input id="toDate" type="date" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"/></div>
+        <div><label class="block text-sm mb-1">Type</label><select id="filterType" class="w-full border border-slate-300 rounded-xl px-3 py-2"><option value="all">All</option><option value="income">Income</option><option value="expense">Expense</option></select></div>
+        <div><label class="block text-sm mb-1">Category</label><select id="filterCat" class="w-full border border-slate-300 rounded-xl px-3 py-2"><option value="all">All</option></select></div>
+        <div class="md:col-span-2"><label class="block text-sm mb-1">Search</label><input id="searchBox" type="text" placeholder="Find description/category… (⌘/Ctrl+K)" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"/></div>
       </div>
+      <div class="flex justify-end mt-3"><button id="applyFiltersBtn" class="btn">Apply</button></div>
     </section>
 
     <!-- KPIs -->
-    <section class="grid md:grid-cols-3 gap-4">
-      <div class="bg-white rounded-2xl shadow p-4">
-        <div class="text-slate-500 text-sm">Total Income</div>
-        <div id="kpiIncome" class="mt-2 text-2xl font-semibold">—</div>
-      </div>
-      <div class="bg-white rounded-2xl shadow p-4">
-        <div class="text-slate-500 text-sm">Total Expenses</div>
-        <div id="kpiExpense" class="mt-2 text-2xl font-semibold">—</div>
-      </div>
-      <div class="bg-white rounded-2xl shadow p-4">
-        <div class="text-slate-500 text-sm">Net</div>
-        <div id="kpiNet" class="mt-2 text-2xl font-semibold">—</div>
-      </div>
+    <section class="grid md:grid-cols-4 gap-4">
+      <div class="card rounded-2xl p-4"><div class="text-slate-500 text-sm">Total Income</div><div id="kpiIncome" class="mt-2 text-2xl font-semibold">—</div></div>
+      <div class="card rounded-2xl p-4"><div class="text-slate-500 text-sm">Total Expenses</div><div id="kpiExpense" class="mt-2 text-2xl font-semibold">—</div></div>
+      <div class="card rounded-2xl p-4"><div class="text-slate-500 text-sm">Net</div><div id="kpiNet" class="mt-2 text-2xl font-semibold">—</div></div>
+      <div class="card rounded-2xl p-4"><div class="flex items-center justify-between"><div class="text-slate-500 text-sm">Current Balance</div><span id="balanceBadge" class="chip">—</span></div><div id="kpiBalance" class="mt-2 text-2xl font-semibold">—</div></div>
     </section>
 
     <!-- Charts -->
     <section class="grid md:grid-cols-2 gap-4">
-      <div class="bg-white rounded-2xl shadow p-4">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-semibold">Monthly Income vs Expense</h3>
-          <button id="resetZoomBar" class="text-sm px-2 py-1 rounded-lg border border-slate-300 hover:bg-slate-50">Reset zoom</button>
-        </div>
-        <canvas id="barChart" height="120"></canvas>
+      <div class="card rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2"><h3 class="font-semibold">Monthly Income vs Expense</h3><button id="resetZoomBar" class="btn btn-ghost text-xs">Reset</button></div>
+        <canvas id="barChart" height="120" aria-label="Monthly income and expense chart" role="img"></canvas>
       </div>
-      <div class="bg-white rounded-2xl shadow p-4">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-semibold">Expense Breakdown by Category</h3>
-          <button id="resetPie" class="text-sm px-2 py-1 rounded-lg border border-slate-300 hover:bg-slate-50">Reset</button>
-        </div>
-        <canvas id="pieChart" height="120"></canvas>
+      <div class="card rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2"><h3 class="font-semibold">Expense Breakdown by Category</h3><button id="resetPie" class="btn btn-ghost text-xs">Reset</button></div>
+        <canvas id="pieChart" height="120" aria-label="Expense breakdown chart" role="img"></canvas>
       </div>
     </section>
 
-    <!-- Table -->
-    <section class="bg-white rounded-2xl shadow">
-      <div class="p-4 flex items-center justify-between">
-        <h3 class="font-semibold">Transactions</h3>
-        <div class="flex gap-2">
-          <button id="exportBtn" class="text-sm px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50">Export filtered CSV</button>
+    <!-- Category totals -->
+    <section class="card rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-2"><h3 class="font-semibold">Totals by Category</h3><button id="exportCatBtn" class="btn text-xs">Export</button></div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm table">
+          <thead>
+            <tr><th class="px-4 py-2 text-left">Category</th><th class="px-4 py-2 text-right">Expense Total</th><th class="px-4 py-2 text-right">Income Total</th></tr>
+          </thead>
+          <tbody id="catBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Alerts & Recommendations -->
+    <section class="card rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-2"><h3 class="font-semibold">Low Balance Watchlist & Recommendations</h3><button id="exportAlertsBtn" class="btn text-xs">Export</button></div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm table">
+            <thead>
+              <tr><th class="px-4 py-2 text-left">Date</th><th class="px-4 py-2 text-right">Running Balance</th><th class="px-4 py-2 text-left">Note</th></tr>
+            </thead>
+            <tbody id="alertsBody"></tbody>
+          </table>
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">Suggestions</h4>
+          <ul id="recsList" class="list-disc list-inside text-sm space-y-1"></ul>
         </div>
       </div>
+    </section>
+
+    <!-- Transactions table -->
+    <section class="card rounded-2xl p-4">
+      <div class="p-1 md:p-2 flex items-center justify-between">
+        <h3 class="font-semibold">Transactions</h3>
+        <div class="flex gap-2"><button id="exportBtn" class="btn text-xs">Export filtered CSV</button></div>
+      </div>
       <div class="overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="bg-slate-100">
+        <table class="min-w-full text-sm table">
+          <thead>
             <tr>
-              <th data-sort="date" class="px-4 py-2 text-left cursor-pointer">Date</th>
-              <th data-sort="desc" class="px-4 py-2 text-left cursor-pointer">Description</th>
+              <th data-sort="date"     class="px-4 py-2 text-left cursor-pointer">Date</th>
+              <th data-sort="desc"     class="px-4 py-2 text-left cursor-pointer">Description</th>
               <th data-sort="category" class="px-4 py-2 text-left cursor-pointer">Category</th>
-              <th data-sort="type" class="px-4 py-2 text-left cursor-pointer">Type</th>
-              <th data-sort="amount" class="px-4 py-2 text-right cursor-pointer">Amount</th>
+              <th data-sort="type"     class="px-4 py-2 text-left cursor-pointer">Type</th>
+              <th data-sort="amount"   class="px-4 py-2 text-right cursor-pointer">Amount</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
-      <div id="tableHint" class="p-4 text-xs text-slate-500">Click a header to sort. Showing <span id="rowCount">0</span> rows.</div>
+      <div class="flex items-center justify-between p-3 text-xs text-slate-600">
+        <div>Showing <span id="rowCount">0</span> rows</div>
+        <div class="flex gap-2 items-center">
+          <button id="prevPage" class="btn">Prev</button>
+          <span id="pageInfo"></span>
+          <button id="nextPage" class="btn">Next</button>
+        </div>
+      </div>
     </section>
 
-    <footer class="text-center text-xs text-slate-500 py-8">Built for GitHub Pages · Works with Google Sheets “Publish to the web → CSV” links · No server required</footer>
+    <footer class="text-center text-xs text-slate-500 py-8">
+      Built for GitHub Pages · Accepts Google Sheets URLs (auto CSV) · Shortcut: <span class="kbd">⌘/Ctrl</span>+<span class="kbd">K</span> to focus search
+    </footer>
   </main>
 
   <!-- About Modal -->
-  <dialog id="aboutModal" class="rounded-2xl p-0 w-full max-w-xl">
-    <div class="p-5 space-y-3">
+  <dialog id="aboutModal" class="rounded-2xl p-0 w-full max-w-2xl">
+    <div class="p-5 space-y-3 bg-white">
       <h3 class="text-lg font-semibold">How to use</h3>
       <ol class="list-decimal list-inside space-y-1 text-sm text-slate-700">
-        <li>Open your Google Sheet → <strong>File → Share → Publish to web</strong>.</li>
-        <li>Choose the tab that contains your transactions and set format to <strong>CSV</strong>.</li>
-        <li>Copy the link and paste it above. Add multiple links if you have multiple tabs/files.</li>
-        <li>Click <strong>Load data</strong>. Then confirm or adjust the column mapping.</li>
-        <li>Set your currency/locale and click <strong>Save settings</strong>.</li>
+        <li>In Google Sheets: <strong>File → Share → Publish to web</strong>.</li>
+        <li>Select your tab → set format to <strong>CSV</strong> → copy the link. (Or paste a normal <code>/edit</code> link; we auto‑convert.)</li>
+        <li>Paste the link, click <strong>Add link</strong>, then <strong>Load data</strong>.</li>
+        <li>Confirm/adjust mapping, set currency & locale, then <strong>Save</strong>.</li>
       </ol>
-      <p class="text-xs text-slate-500">Expected columns (any order): Date, Description, Category, Type (Income/Outcome), Amount. If Type is missing, the sign of Amount is used to infer Income vs Expense.</p>
-      <div class="pt-2 text-right"><button class="px-3 py-2 rounded-xl bg-slate-900 text-white" onclick="aboutModal.close()">Close</button></div>
+      <div class="text-sm">
+        <p class="font-semibold">Example sheet (any order is fine):</p>
+        <div class="overflow-x-auto mt-2">
+          <table class="min-w-full text-xs border border-slate-300">
+            <thead class="bg-slate-100">
+              <tr><th class="px-2 py-1 text-left">Date</th><th class="px-2 py-1 text-left">Description</th><th class="px-2 py-1 text-left">Category</th><th class="px-2 py-1 text-left">Type</th><th class="px-2 py-1 text-left">Amount</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="px-2 py-1">2025-01-01</td><td class="px-2 py-1">Salary Payment</td><td class="px-2 py-1">Job Income</td><td class="px-2 py-1">Income</td><td class="px-2 py-1">2500</td></tr>
+              <tr><td class="px-2 py-1">2025-01-03</td><td class="px-2 py-1">Grocery Store</td><td class="px-2 py-1">Food</td><td class="px-2 py-1">Expense</td><td class="px-2 py-1">-120.75</td></tr>
+              <tr><td class="px-2 py-1">2025-01-05</td><td class="px-2 py-1">Freelance Project</td><td class="px-2 py-1">Side Hustle</td><td class="px-2 py-1">Income</td><td class="px-2 py-1">600</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="pt-2 text-right"><button class="btn brand-bg" onclick="aboutModal.close()">Close</button></div>
     </div>
   </dialog>
 
   <script>
-  // --- Local Storage Keys ---
-  const LS_KEYS = {
-    links: 'io_links',
-    mapping: 'io_mapping',
-    settings: 'io_settings'
-  };
-
-  // --- State ---
+  // ===== State =====
+  const LS_KEYS = { links:'io_links', mapping:'io_mapping', settings:'io_settings', cache:'io_cache_v1' };
   let RAW_HEADERS = new Set();
-  let RAW_ROWS = []; // Array of objects from Papa (merged from all CSVs)
-  let MAPPING = { date: '', desc: '', category: '', type: '', amount: '' };
-  let SETTINGS = { currency: 'USD', locale: navigator.language || 'en-US' };
-  let FILTERS = { from: null, to: null, type: 'all', category: 'all' };
-  let SORT = { key: 'date', dir: 'desc' };
+  let RAW_ROWS = [];
+  let MAPPING = { date:'', desc:'', category:'', type:'', amount:'' };
+  let SETTINGS = { currency:'USD', locale: navigator.language || 'en-US', rowsPerPage:50, brand:'#2563eb', startingBalance:0, lowThreshold:100 };
+  let FILTERS = { from:null, to:null, type:'all', category:'all', search:'' };
+  let SORT = { key:'date', dir:'desc' };
+  let PAGE = { index:1 };
 
-  // --- Currency & Locale options ---
   const COMMON_CURRENCIES = ['USD','CRC','EUR','GBP','CAD','MXN'];
   const COMMON_LOCALES = ['en-US','es-CR','es-ES','en-GB','fr-FR'];
 
+  // ===== Els =====
+  const brandColor = document.getElementById('brandColor');
+  const aboutBtn = document.getElementById('aboutBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const aboutModal = document.getElementById('aboutModal');
+
   const currencySel = document.getElementById('currency');
   const localeSel = document.getElementById('locale');
+  const rowsPerPage = document.getElementById('rowsPerPage');
+  const startingBalance = document.getElementById('startingBalance');
+  const lowThreshold = document.getElementById('lowThreshold');
 
-  function populateSelectOptions() {
-    // currency
-    currencySel.innerHTML = COMMON_CURRENCIES.map(c => `<option value="${c}">${c}</option>`).join('');
-    // locale
-    localeSel.innerHTML = COMMON_LOCALES.map(l => `<option value="${l}">${l}</option>`).join('');
-  }
-  populateSelectOptions();
-
-  // --- UI Elements ---
-  const linksUl = document.getElementById('linksUl');
-  const linkList = document.getElementById('linkList');
   const csvUrl = document.getElementById('csvUrl');
   const addLinkBtn = document.getElementById('addLinkBtn');
   const loadBtn = document.getElementById('loadBtn');
-  const remapBtn = document.getElementById('remapBtn');
-  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-  const applyMappingBtn = document.getElementById('applyMappingBtn');
-  const aboutBtn = document.getElementById('aboutBtn');
-  const resetBtn = document.getElementById('resetBtn');
+  const loadSampleBtn = document.getElementById('loadSampleBtn');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const linkList = document.getElementById('linkList');
+  const linksUl = document.getElementById('linksUl');
 
   const mapDate = document.getElementById('mapDate');
   const mapDesc = document.getElementById('mapDesc');
   const mapCat  = document.getElementById('mapCat');
   const mapType = document.getElementById('mapType');
   const mapAmt  = document.getElementById('mapAmt');
+  const remapBtn = document.getElementById('remapBtn');
+  const applyMappingBtn = document.getElementById('applyMappingBtn');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 
   const fromDate = document.getElementById('fromDate');
   const toDate = document.getElementById('toDate');
   const filterType = document.getElementById('filterType');
   const filterCat = document.getElementById('filterCat');
-  const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+  const searchBox = document.getElementById('searchBox');
 
   const kpiIncome = document.getElementById('kpiIncome');
   const kpiExpense = document.getElementById('kpiExpense');
   const kpiNet = document.getElementById('kpiNet');
+  const kpiBalance = document.getElementById('kpiBalance');
+  const balanceBadge = document.getElementById('balanceBadge');
+
   const tbody = document.getElementById('tbody');
   const rowCount = document.getElementById('rowCount');
   const exportBtn = document.getElementById('exportBtn');
+  const exportCatBtn = document.getElementById('exportCatBtn');
+  const exportAlertsBtn = document.getElementById('exportAlertsBtn');
+  const pageInfo = document.getElementById('pageInfo');
+  const prevPage = document.getElementById('prevPage');
+  const nextPage = document.getElementById('nextPage');
+  const alertsBody = document.getElementById('alertsBody');
+  const recsList = document.getElementById('recsList');
 
-  const aboutModal = document.getElementById('aboutModal');
+  function populateSelectOptions(){
+    currencySel.innerHTML = COMMON_CURRENCIES.map(c=>`<option value="${c}">${c}</option>`).join('');
+    localeSel.innerHTML = COMMON_LOCALES.map(l=>`<option value="${l}">${l}</option>`).join('');
+  }
+  populateSelectOptions();
 
-  // --- Helpers ---
-  const SYNS = {
-    date: ['date','fecha','transaction date','posted','day'],
-    desc: ['description','details','memo','note','concept','concepto'],
-    category: ['category','categoría','categoria','type of expense','group'],
-    type: ['type','income/outcome','income/expense','flow','in/out','io','credit/debit','cr/dr'],
-    amount: ['amount','monto','importe','value','total','debit','credit','dr','cr']
-  };
+  // ===== Helpers =====
+  const SYNS = { date:['date','fecha','transaction date','posted','day'], desc:['description','details','memo','note','concept','concepto'], category:['category','categoría','categoria','type of expense','group'], type:['type','income/outcome','income/expense','flow','in/out','io','credit/debit','cr/dr'], amount:['amount','monto','importe','value','total','debit','credit','dr','cr'] };
+  const qs = k => new URLSearchParams(location.search).get(k);
+  const normalizeHeader = s => String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+  function toast(msg){ const el=document.createElement('div'); el.className='fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-3 py-2 rounded-xl shadow'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),1800); }
+  function uniq(arr){ return Array.from(new Set(arr)); }
+  function guessHeader(headers, kind){ const candidates=SYNS[kind]; const norm=headers.map(h=>normalizeHeader(h)); for(const syn of candidates){ const idx=norm.findIndex(h=>h===syn||h.includes(syn)); if(idx!==-1) return headers[idx]; } if(kind==='amount'){ return headers.find(h=>/amount|importe|monto|total|value|debit|credit|dr|cr/i.test(h))||headers[0]; } return headers[0]; }
+  function normalizeGsUrl(u){ try{ const url=new URL(u); if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){ if(url.pathname.includes('/pub')) return url.toString(); if(url.pathname.includes('/export')){ url.searchParams.set('format','csv'); return url.toString(); } const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); if(m){ return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`; } } return u; }catch{return u;} }
+  function parseAmount(val){ if(val==null) return NaN; let s=String(val).trim(); if(!s) return NaN; const neg=/^\(.*\)$/.test(s); s=s.replace(/[()]/g,''); s=s.replace(/[^0-9,.-]/g,''); if(s.includes(',')&&s.includes('.')) s=s.replace(/,/g,''); else if(s.includes(',')&&!s.includes('.')) s=s.replace(/,/g,'.'); const n=parseFloat(s); if(isNaN(n)) return NaN; return neg? -n : n; }
+  function inferType(typeVal, amountVal){ if(typeVal!=null && String(typeVal).trim()!==''){ const v=normalizeHeader(typeVal); if(/income|ingreso|credit|cr|in\b/.test(v)) return 'income'; if(/expense|outcome|egreso|debit|dr|out\b/.test(v)) return 'expense'; } if(typeof amountVal==='number'&&!isNaN(amountVal)) return amountVal<0?'expense':'income'; return 'expense'; }
+  function fmtCurrency(n){ try{ return new Intl.NumberFormat(SETTINGS.locale,{style:'currency',currency:SETTINGS.currency}).format(n);}catch{ return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);} }
+  const monthKey=d=> d.getFullYear()+ '-' + String(d.getMonth()+1).padStart(2,'0');
+  function parseDate(val){ if(!val) return null; const d1=new Date(val); if(!isNaN(d1)) return d1; const m=String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); if(m){ const [_,d,mth,y]=m; const year=y.length===2?(2000+parseInt(y)):parseInt(y); const dt=new Date(year,parseInt(mth)-1,parseInt(d)); if(!isNaN(dt)) return dt; } return null; }
 
-  function normalizeHeader(s) {
-    return String(s || '').trim().toLowerCase().replace(/\s+/g,' ');
+  // ===== Links =====
+  function getLinks(){ try{ return JSON.parse(localStorage.getItem(LS_KEYS.links)||'[]'); }catch{return [];} }
+  function setLinks(list){ localStorage.setItem(LS_KEYS.links, JSON.stringify(list)); renderLinks(); }
+  function addLink(url){ const clean=String(url||'').trim(); if(!clean) return; const list=getLinks(); const normalized=normalizeGsUrl(clean); if(!list.includes(normalized)) list.push(normalized); setLinks(list); }
+  function removeLink(url){ const list=getLinks().filter(u=>u!==url); setLinks(list); }
+  function renderLinks(){ const list=getLinks(); linkList.classList.toggle('hidden', list.length===0); linksUl.innerHTML=list.map(u=>`<li class="flex items-center justify-between gap-3 p-2 border border-slate-200 rounded-xl bg-white"><a href="${u}" target="_blank" class="truncate text-slate-700 hover:underline flex-1">${u}</a><button data-url="${u}" class="btn text-xs removeLink">Remove</button></li>`).join(''); linksUl.querySelectorAll('.removeLink').forEach(btn=>btn.addEventListener('click',e=>removeLink(e.currentTarget.dataset.url))); }
+
+  // ===== Cache =====
+  function cacheGet(key){ try{ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); return all[key]; }catch{return undefined;} }
+  function cacheSet(key, value){ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); all[key]=value; localStorage.setItem(LS_KEYS.cache, JSON.stringify(all)); }
+
+  async function fetchCsv(url, {bypassCache=false}={}){
+    const cacheKey='csv:'+url;
+    if(!bypassCache){ const cached=cacheGet(cacheKey); if(cached){ return Papa.parse(cached, {header:true, dynamicTyping:false, skipEmptyLines:true}).data; } }
+    const res=await fetch(url, {cache:'no-store'}); if(!res.ok) throw new Error(`Failed to fetch: ${res.status}`); const text=await res.text(); cacheSet(cacheKey, text); return new Promise((resolve,reject)=> Papa.parse(text,{header:true,dynamicTyping:false,skipEmptyLines:true,complete:r=>resolve(r.data),error:reject}));
   }
 
-  function guessHeader(headers, kind) {
-    const candidates = SYNS[kind];
-    const normHeaders = headers.map(h => normalizeHeader(h));
-    // Prefer exact contains
-    for (const syn of candidates) {
-      const idx = normHeaders.findIndex(h => h === syn || h.includes(syn));
-      if (idx !== -1) return headers[idx];
-    }
-    // Special handling: amount – prefer column that looks numeric in sample rows
-    if (kind === 'amount') {
-      return headers.find(h => /amount|importe|monto|total|value|debit|credit|dr|cr/i.test(h)) || headers[0];
-    }
-    // Fallback to first header
-    return headers[0];
+  async function loadData({bypassCache=false}={}){
+    const list=getLinks(); if(list.length===0){ toast('Add at least one CSV link.'); return; }
+    RAW_HEADERS=new Set(); RAW_ROWS=[]; loadBtn.disabled=true; loadBtn.textContent='Loading…';
+    try{
+      for(const url of list){ const rows=await fetchCsv(url,{bypassCache}); if(rows&&rows.length){ RAW_ROWS.push(...rows); Object.keys(rows[0]).forEach(h=>RAW_HEADERS.add(h)); } }
+      if(RAW_ROWS.length===0){ toast('No rows found. Check your links or sheet tab.'); return; }
+      renderMappingSelectors(); renderAll(); toast('Data loaded.');
+    }catch(e){ console.error(e); alert('Error while loading CSVs: '+e.message); }
+    finally{ loadBtn.disabled=false; loadBtn.textContent='Load data'; }
   }
 
-  function renderMappingSelectors() {
-    const headers = Array.from(RAW_HEADERS);
-    const opts = ['<option value="">—</option>'].concat(headers.map(h => `<option value="${h}">${h}</option>`)).join('');
-    mapDate.innerHTML = opts; mapDesc.innerHTML = opts; mapCat.innerHTML = opts; mapType.innerHTML = opts; mapAmt.innerHTML = opts;
+  // ===== Transform =====
+  function renderMappingSelectors(){ const headers=Array.from(RAW_HEADERS); const opts=['<option value="">—</option>'].concat(headers.map(h=>`<option value="${h}">${h}</option>`)).join(''); mapDate.innerHTML=opts; mapDesc.innerHTML=opts; mapCat.innerHTML=opts; mapType.innerHTML=opts; mapAmt.innerHTML=opts; const saved=JSON.parse(localStorage.getItem(LS_KEYS.mapping)||'null'); if(saved&&headers.length){ MAPPING=saved; } else if(headers.length){ MAPPING.date=guessHeader(headers,'date'); MAPPING.desc=guessHeader(headers,'desc'); MAPPING.category=guessHeader(headers,'category'); MAPPING.type=guessHeader(headers,'type'); MAPPING.amount=guessHeader(headers,'amount'); } mapDate.value=MAPPING.date||''; mapDesc.value=MAPPING.desc||''; mapCat.value=MAPPING.category||''; mapType.value=MAPPING.type||''; mapAmt.value=MAPPING.amount||''; const savedSettings=JSON.parse(localStorage.getItem(LS_KEYS.settings)||'null'); if(savedSettings) SETTINGS={...SETTINGS, ...savedSettings}; currencySel.value=SETTINGS.currency; localeSel.value=SETTINGS.locale; rowsPerPage.value=SETTINGS.rowsPerPage; startingBalance.value=SETTINGS.startingBalance; lowThreshold.value=SETTINGS.lowThreshold; brandColor.value=SETTINGS.brand; document.documentElement.style.setProperty('--brand', SETTINGS.brand); }
 
-    // Apply remembered mapping or guess
-    const saved = JSON.parse(localStorage.getItem(LS_KEYS.mapping) || 'null');
-    if (saved && headers.length) {
-      MAPPING = saved;
-    } else if (headers.length) {
-      MAPPING.date = guessHeader(headers, 'date');
-      MAPPING.desc = guessHeader(headers, 'desc');
-      MAPPING.category = guessHeader(headers, 'category');
-      MAPPING.type = guessHeader(headers, 'type');
-      MAPPING.amount = guessHeader(headers, 'amount');
-    }
+  function applyMappingFromUI(){ MAPPING={ date:mapDate.value, desc:mapDesc.value, category:mapCat.value, type:mapType.value, amount:mapAmt.value }; localStorage.setItem(LS_KEYS.mapping, JSON.stringify(MAPPING)); toast('Mapping applied.'); renderAll(); }
+  function saveSettings(){ SETTINGS.currency=currencySel.value; SETTINGS.locale=localeSel.value; SETTINGS.rowsPerPage=parseInt(rowsPerPage.value||50,10); SETTINGS.startingBalance=parseFloat(startingBalance.value||0); SETTINGS.lowThreshold=parseFloat(lowThreshold.value||0); SETTINGS.brand=brandColor.value; localStorage.setItem(LS_KEYS.settings, JSON.stringify(SETTINGS)); document.documentElement.style.setProperty('--brand', SETTINGS.brand); toast('Settings saved.'); renderAll(); }
 
-    mapDate.value = MAPPING.date || '';
-    mapDesc.value = MAPPING.desc || '';
-    mapCat.value  = MAPPING.category || '';
-    mapType.value = MAPPING.type || '';
-    mapAmt.value  = MAPPING.amount || '';
+  function transformRows(){ if(!RAW_ROWS.length) return []; const dK=MAPPING.date,deK=MAPPING.desc,cK=MAPPING.category,tK=MAPPING.type,aK=MAPPING.amount; const out=[]; for(const r of RAW_ROWS){ const d=parseDate(r[dK]); const amtRaw=r[aK]; const amt=parseAmount(amtRaw); if(!d||isNaN(amt)) continue; const t=inferType(r[tK], amt); const absAmt=Math.abs(amt); out.push({ date:d, desc:String(r[deK]??'').trim(), category:String(r[cK]??'').trim()||'(Uncategorized)', type:t, amount:absAmt, _raw:r }); } return out; }
 
-    // Settings
-    const savedSettings = JSON.parse(localStorage.getItem(LS_KEYS.settings) || 'null');
-    if (savedSettings) SETTINGS = savedSettings;
-    currencySel.value = SETTINGS.currency;
-    localeSel.value = SETTINGS.locale;
-  }
+  // ===== Filter/Sort/Paginate =====
+  function applyFilters(rows){ let res=rows.slice(); if(FILTERS.from){ const f=new Date(FILTERS.from); res=res.filter(x=>x.date>=f); } if(FILTERS.to){ const t=new Date(FILTERS.to); t.setHours(23,59,59,999); res=res.filter(x=>x.date<=t); } if(FILTERS.type!=='all') res=res.filter(x=>x.type===FILTERS.type); if(FILTERS.category!=='all') res=res.filter(x=>x.category===FILTERS.category); if(FILTERS.search){ const q=FILTERS.search.toLowerCase(); res=res.filter(x=> (x.desc.toLowerCase().includes(q) || x.category.toLowerCase().includes(q)) ); } return res; }
+  function sortRows(rows){ const dir=SORT.dir==='asc'?1:-1; return rows.sort((a,b)=>{ const k=SORT.key; if(k==='amount') return (a.amount-b.amount)*dir; if(k==='date') return (a.date-b.date)*dir; const av=(a[k]||'').toString().toLowerCase(); const bv=(b[k]||'').toString().toLowerCase(); return av<bv? -1*dir : av>bv? 1*dir : 0; }); }
+  function paginate(rows){ const size=SETTINGS.rowsPerPage; const total=Math.max(1, Math.ceil(rows.length/size)); if(PAGE.index>total) PAGE.index=total; const start=(PAGE.index-1)*size; return { slice: rows.slice(start, start+size), totalPages: total, totalRows: rows.length }; }
 
-  function saveSettings() {
-    SETTINGS.currency = currencySel.value;
-    SETTINGS.locale = localeSel.value;
-    localStorage.setItem(LS_KEYS.settings, JSON.stringify(SETTINGS));
-    toast('Settings saved.');
-    renderAll();
-  }
-
-  function applyMappingFromUI() {
-    MAPPING = {
-      date: mapDate.value,
-      desc: mapDesc.value,
-      category: mapCat.value,
-      type: mapType.value,
-      amount: mapAmt.value
-    };
-    localStorage.setItem(LS_KEYS.mapping, JSON.stringify(MAPPING));
-    toast('Mapping applied.');
-    renderAll();
-  }
-
-  function parseAmount(val) {
-    if (val == null) return NaN;
-    let s = String(val).trim();
-    if (!s) return NaN;
-    // Handle parentheses negatives and currency symbols
-    const neg = /^\(.*\)$/.test(s);
-    s = s.replace(/[()]/g,'');
-    // Remove all non-digit/.,-/ characters
-    s = s.replace(/[^0-9,.-]/g,'');
-    // If both comma and dot appear, assume comma is thousands
-    if (s.includes(',') && s.includes('.')) s = s.replace(/,/g,'');
-    // If only comma appears, assume it's decimal
-    else if (s.includes(',') && !s.includes('.')) s = s.replace(/,/g,'.');
-    const n = parseFloat(s);
-    if (isNaN(n)) return NaN;
-    return neg ? -n : n;
-  }
-
-  function inferType(typeVal, amountVal) {
-    if (typeVal != null && String(typeVal).trim() !== '') {
-      const v = normalizeHeader(typeVal);
-      if (/income|ingreso|credit|cr|in\b/.test(v)) return 'income';
-      if (/expense|outcome|egreso|debit|dr|out\b/.test(v)) return 'expense';
-    }
-    if (typeof amountVal === 'number' && !isNaN(amountVal)) {
-      return amountVal < 0 ? 'expense' : 'income';
-    }
-    return 'expense';
-  }
-
-  function fmtCurrency(n) {
-    try {
-      return new Intl.NumberFormat(SETTINGS.locale, { style: 'currency', currency: SETTINGS.currency }).format(n);
-    } catch {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
-    }
-  }
-
-  function monthKey(d) {
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-  }
-
-  function parseDate(val) {
-    if (!val) return null;
-    // Try native Date parse, then dd/mm/yyyy
-    const d1 = new Date(val);
-    if (!isNaN(d1)) return d1;
-    const m = String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
-    if (m) {
-      const [_, d, mth, y] = m;
-      const year = y.length === 2 ? (2000 + parseInt(y)) : parseInt(y);
-      const dt = new Date(year, parseInt(mth)-1, parseInt(d));
-      if (!isNaN(dt)) return dt;
-    }
-    return null;
-  }
-
-  function uniq(arr) { return Array.from(new Set(arr)); }
-
-  function toast(msg) {
-    const el = document.createElement('div');
-    el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-3 py-2 rounded-xl shadow';
-    el.textContent = msg;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 2000);
-  }
-
-  // --- Load saved links ---
-  function getLinks() {
-    try { return JSON.parse(localStorage.getItem(LS_KEYS.links) || '[]'); } catch { return []; }
-  }
-  function setLinks(list) {
-    localStorage.setItem(LS_KEYS.links, JSON.stringify(list));
-    renderLinks();
-  }
-  function addLink(url) {
-    const clean = String(url || '').trim();
-    if (!clean) return;
-    const list = getLinks();
-    if (!list.includes(clean)) list.push(clean);
-    setLinks(list);
-  }
-  function removeLink(url) {
-    const list = getLinks().filter(u => u !== url);
-    setLinks(list);
-  }
-  function renderLinks() {
-    const list = getLinks();
-    linkList.classList.toggle('hidden', list.length === 0);
-    linksUl.innerHTML = list.map(u => `
-      <li class="flex items-center justify-between gap-3 p-2 border border-slate-200 rounded-xl">
-        <a href="${u}" target="_blank" class="truncate text-slate-700 hover:underline flex-1">${u}</a>
-        <button data-url="${u}" class="removeLink text-sm px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">Remove</button>
-      </li>`).join('');
-    linksUl.querySelectorAll('.removeLink').forEach(btn => btn.addEventListener('click', e => removeLink(e.currentTarget.dataset.url)));
-  }
-
-  // --- Fetch & Parse CSVs ---
-  async function fetchCsv(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
-    const text = await res.text();
-    return new Promise((resolve, reject) => {
-      Papa.parse(text, { header: true, dynamicTyping: false, skipEmptyLines: true, complete: r => resolve(r.data), error: reject });
-    });
-  }
-
-  async function loadData() {
-    const list = getLinks();
-    if (list.length === 0) { toast('Add at least one CSV link.'); return; }
-
-    RAW_HEADERS = new Set();
-    RAW_ROWS = [];
-
-    loadBtn.disabled = true; loadBtn.textContent = 'Loading…';
-    try {
-      for (const url of list) {
-        const rows = await fetchCsv(url);
-        if (rows && rows.length) {
-          RAW_ROWS.push(...rows);
-          Object.keys(rows[0]).forEach(h => RAW_HEADERS.add(h));
-        }
-      }
-      if (RAW_ROWS.length === 0) {
-        toast('No rows found. Check your links or sheet tab.');
-        return;
-      }
-      renderMappingSelectors();
-      renderAll();
-      toast('Data loaded.');
-    } catch (e) {
-      console.error(e);
-      alert('Error while loading CSVs: ' + e.message);
-    } finally {
-      loadBtn.disabled = false; loadBtn.textContent = 'Load data';
-    }
-  }
-
-  // --- Transform rows according to mapping ---
-  function transformRows() {
-    if (!RAW_ROWS.length) return [];
-    const dK = MAPPING.date, deK = MAPPING.desc, cK = MAPPING.category, tK = MAPPING.type, aK = MAPPING.amount;
-    const out = [];
-    for (const r of RAW_ROWS) {
-      const d = parseDate(r[dK]);
-      const amtRaw = r[aK];
-      const amt = parseAmount(amtRaw);
-      if (!d || isNaN(amt)) continue;
-      const t = inferType(r[tK], amt);
-      const absAmt = Math.abs(amt);
-      out.push({
-        date: d,
-        desc: String(r[deK] ?? '').trim(),
-        category: String(r[cK] ?? '').trim() || '(Uncategorized)',
-        type: t,
-        amount: absAmt,
-      });
-    }
-    return out;
-  }
-
-  function applyFilters(rows) {
-    let res = rows.slice();
-    // Dates
-    if (FILTERS.from) {
-      const f = new Date(FILTERS.from);
-      res = res.filter(x => x.date >= f);
-    }
-    if (FILTERS.to) {
-      const t = new Date(FILTERS.to);
-      // include entire day
-      t.setHours(23,59,59,999);
-      res = res.filter(x => x.date <= t);
-    }
-    // Type
-    if (FILTERS.type !== 'all') res = res.filter(x => x.type === FILTERS.type);
-    // Category
-    if (FILTERS.category !== 'all') res = res.filter(x => x.category === FILTERS.category);
-    return res;
-  }
-
-  function sortRows(rows) {
-    const dir = SORT.dir === 'asc' ? 1 : -1;
-    return rows.sort((a,b) => {
-      const k = SORT.key;
-      if (k === 'amount') return (a.amount - b.amount) * dir;
-      if (k === 'date') return (a.date - b.date) * dir;
-      const av = (a[k] || '').toString().toLowerCase();
-      const bv = (b[k] || '').toString().toLowerCase();
-      return av < bv ? -1*dir : av > bv ? 1*dir : 0;
-    });
-  }
-
-  // --- Renderers ---
+  // ===== Renderers =====
   let barChart, pieChart;
+  function renderKPIs(rows){ const income=rows.filter(x=>x.type==='income').reduce((s,x)=>s+x.amount,0); const expense=rows.filter(x=>x.type==='expense').reduce((s,x)=>s+x.amount,0); kpiIncome.textContent=fmtCurrency(income); kpiExpense.textContent=fmtCurrency(expense); kpiNet.textContent=fmtCurrency(income-expense); const bal=SETTINGS.startingBalance + income - expense; kpiBalance.textContent=fmtCurrency(bal); balanceBadge.textContent = bal < SETTINGS.lowThreshold ? 'LOW' : 'OK'; balanceBadge.style.borderColor = bal < SETTINGS.lowThreshold ? '#f87171' : '#34d399'; balanceBadge.style.color = bal < SETTINGS.lowThreshold ? '#b91c1c' : '#065f46'; }
+  function renderFiltersMeta(rows){ const cats=uniq(rows.map(x=>x.category)).sort((a,b)=>a.localeCompare(b)); filterCat.innerHTML='<option value="all">All</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join(''); }
+  function renderTable(rows){ const fmt=d=>d.toISOString().slice(0,10); const fmtAmt=(n,type)=>`${type==='expense'?'-':''}${fmtCurrency(n)}`; const {slice,totalPages,totalRows}=paginate(rows); tbody.innerHTML=slice.map(r=>`<tr class="border-t border-slate-200"><td class="px-4 py-2 whitespace-nowrap">${fmt(r.date)}</td><td class="px-4 py-2">${escapeHtml(r.desc)||'<span class=\'text-slate-400\'>(No description)</span>'}</td><td class="px-4 py-2">${escapeHtml(r.category)}</td><td class="px-4 py-2">${r.type==='income'?'Income':'Expense'}</td><td class="px-4 py-2 text-right">${fmtAmt(r.amount, r.type)}</td></tr>`).join(''); rowCount.textContent=totalRows; pageInfo.textContent=`Page ${PAGE.index} / ${totalPages}`; prevPage.disabled=PAGE.index<=1; nextPage.disabled=PAGE.index>=totalPages; }
+  function renderCategoryTotals(rows){ const byCat={}; for(const r of rows){ if(!byCat[r.category]) byCat[r.category]={expense:0,income:0}; byCat[r.category][r.type]+=r.amount; } const cats=Object.keys(byCat).sort((a,b)=> (byCat[b].expense-byCat[a].expense)); const catBody=document.getElementById('catBody'); catBody.innerHTML=cats.map(c=>`<tr class="border-t border-slate-200"><td class="px-4 py-2">${escapeHtml(c)}</td><td class="px-4 py-2 text-right">${fmtCurrency(byCat[c].expense)}</td><td class="px-4 py-2 text-right">${fmtCurrency(byCat[c].income)}</td></tr>`).join(''); }
+  function renderAlerts(rows){ const sorted = rows.slice().sort((a,b)=>a.date-b.date); let bal = SETTINGS.startingBalance; const events = []; for(const r of sorted){ bal += (r.type==='income'? r.amount : -r.amount); if(bal < SETTINGS.lowThreshold){ events.push({ date: r.date, balance: bal, note: `${r.type==='expense'?'Expense':'Income'}: ${r.desc || '(no description)'}`}); } } alertsBody.innerHTML = events.length ? events.map(e=>`<tr class="border-t border-slate-200"><td class="px-4 py-2">${e.date.toISOString().slice(0,10)}</td><td class="px-4 py-2 text-right">${fmtCurrency(e.balance)}</td><td class="px-4 py-2">${escapeHtml(e.note)}</td></tr>`).join('') : `<tr><td colspan="3" class="px-4 py-3 text-slate-600 text-sm">No low-balance events based on current filters and thresholds.</td></tr>`; const recs = []; const last30 = rows.filter(r=> { const d=new Date(); d.setDate(d.getDate()-30); return r.date>=d; }); const byCat = {}; last30.filter(r=>r.type==='expense').forEach(r=> byCat[r.category]=(byCat[r.category]||0)+r.amount ); const topCats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,3); if(topCats.length){ recs.push(`Biggest expense categories (30d): ${topCats.map(([c,v])=>`${c} (${fmtCurrency(v)})`).join(', ')} — set caps or renegotiate.`); } const byDesc={}; rows.filter(r=>r.type==='expense').forEach(r=>{ const k=(r.desc||'').toLowerCase(); byDesc[k]=(byDesc[k]||{count:0,total:0,pretty:r.desc}); byDesc[k].count++; byDesc[k].total+=r.amount; }); const recurring = Object.values(byDesc).filter(x=>x.count>=3).sort((a,b)=>b.total-a.total).slice(0,3); if(recurring.length){ recs.push(`Recurring spend detected: ${recurring.map(x=>`${x.pretty} ×${x.count} (${fmtCurrency(x.total)})`).join(', ')} — consider annual plans or alternatives.`); } const now=new Date(); const startMonth=new Date(now.getFullYear(), now.getMonth(), 1); const thisMonth=rows.filter(r=>r.date>=startMonth); const incM=thisMonth.filter(x=>x.type==='income').reduce((s,x)=>s+x.amount,0); const expM=thisMonth.filter(x=>x.type==='expense').reduce((s,x)=>s+x.amount,0); if(incM && expM && expM>incM){ recs.push(`This month is negative by ${fmtCurrency(expM-incM)} — freeze non‑essential categories.`); } if(!recs.length) recs.push('Looking good! No obvious risks with the current filters.'); recsList.innerHTML = recs.map(r=>`<li>${r}</li>`).join(''); }
+  function renderCharts(rows){ const buckets={}; for(const r of rows){ const key=monthKey(r.date); if(!buckets[key]) buckets[key]={income:0,expense:0}; buckets[key][r.type]+=r.amount; } const labels=Object.keys(buckets).sort(); const income=labels.map(k=>buckets[k].income); const expense=labels.map(k=>buckets[k].expense); const ctxBar=document.getElementById('barChart'); if(barChart) barChart.destroy(); barChart=new Chart(ctxBar,{ type:'bar', data:{ labels, datasets:[{label:'Income',data:income},{label:'Expense',data:expense}] }, options:{ responsive:true, scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{position:'top'}, tooltip:{ callbacks:{ label:ctx=>`${ctx.dataset.label}: ${fmtCurrency(ctx.parsed.y)}` } } } } }); const byCat={}; rows.filter(r=>r.type==='expense').forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+r.amount; }); const pieLabels=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]); const pieData=pieLabels.map(l=>byCat[l]); const ctxPie=document.getElementById('pieChart'); if(pieChart) pieChart.destroy(); pieChart=new Chart(ctxPie,{ type:'doughnut', data:{ labels:pieLabels, datasets:[{ data:pieData }] }, options:{ plugins:{ legend:{position:'right'}, tooltip:{ callbacks:{ label:c=>`${c.label}: ${fmtCurrency(c.parsed)}` } } } } }); }
+  function renderAll(){ if(!MAPPING.date||!MAPPING.amount) return; const rows=transformRows(); renderFiltersMeta(rows); const filtered=applyFilters(rows); const sorted=sortRows(filtered); renderKPIs(filtered); renderTable(sorted); renderCharts(filtered); renderCategoryTotals(sorted); renderAlerts(sorted); }
 
-  function renderKPIs(rows) {
-    const income = rows.filter(x => x.type === 'income').reduce((s,x) => s + x.amount, 0);
-    const expense = rows.filter(x => x.type === 'expense').reduce((s,x) => s + x.amount, 0);
-    kpiIncome.textContent = fmtCurrency(income);
-    kpiExpense.textContent = fmtCurrency(expense);
-    kpiNet.textContent = fmtCurrency(income - expense);
-  }
+  // ===== Export =====
+  function exportCsv(rows){ if(!rows.length){ toast('Nothing to export.'); return; } const headers=['Date','Description','Category','Type','Amount']; const lines=[headers.join(',')]; const q=s=> '"'+String(s).replace(/"/g,'""')+'"'; for(const r of rows){ lines.push([r.date.toISOString().slice(0,10), r.desc, r.category, r.type, (r.type==='expense'?-r.amount:r.amount)].map(q).join(',')); } const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='transactions_filtered.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
+  function exportCat(rows){ const byCat={}; for(const r of rows){ if(!byCat[r.category]) byCat[r.category]={expense:0,income:0}; byCat[r.category][r.type]+=r.amount; } const lines=['Category,Expense,Income']; for(const c of Object.keys(byCat)){ lines.push([c, byCat[c].expense, byCat[c].income].map(x=>`"${x}"`).join(',')); } const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='category_totals.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
+  function exportAlerts(rows){ const sorted=rows.slice().sort((a,b)=>a.date-b.date); let bal=SETTINGS.startingBalance; const lines=['Date,Running Balance,Note']; for(const r of sorted){ bal += (r.type==='income'? r.amount : -r.amount); if(bal < SETTINGS.lowThreshold){ lines.push([r.date.toISOString().slice(0,10), fmtCurrency(bal), r.desc||'(no description)'].map(x=>`"${x}"`).join(',')); } } const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='low_balance_alerts.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
 
-  function renderFiltersMeta(rows) {
-    // Populate category filter
-    const cats = uniq(rows.map(x => x.category)).sort((a,b) => a.localeCompare(b));
-    filterCat.innerHTML = '<option value="all">All</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
-  }
-
-  function renderTable(rows) {
-    const fmt = (d) => d.toISOString().slice(0,10);
-    const fmtAmt = (n, type) => `${type === 'expense' ? '-' : ''}${fmtCurrency(n)}`;
-    tbody.innerHTML = rows.map(r => `
-      <tr class="border-t border-slate-100">
-        <td class="px-4 py-2 whitespace-nowrap">${fmt(r.date)}</td>
-        <td class="px-4 py-2">${escapeHtml(r.desc) || '<span class=\'text-slate-400\'>(No description)</span>'}</td>
-        <td class="px-4 py-2">${escapeHtml(r.category)}</td>
-        <td class="px-4 py-2">${r.type === 'income' ? 'Income' : 'Expense'}</td>
-        <td class="px-4 py-2 text-right">${fmtAmt(r.amount, r.type)}</td>
-      </tr>`).join('');
-    rowCount.textContent = rows.length;
-  }
-
-  function renderCharts(rows) {
-    // Monthly income/expense
-    const buckets = {};
-    for (const r of rows) {
-      const key = monthKey(r.date);
-      if (!buckets[key]) buckets[key] = { income: 0, expense: 0 };
-      buckets[key][r.type] += r.amount;
-    }
-    const labels = Object.keys(buckets).sort();
-    const income = labels.map(k => buckets[k].income);
-    const expense = labels.map(k => buckets[k].expense);
-
-    const ctxBar = document.getElementById('barChart');
-    if (barChart) barChart.destroy();
-    barChart = new Chart(ctxBar, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Income', data: income },
-          { label: 'Expense', data: expense }
-        ]
-      },
-      options: {
-        responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-        plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.parsed.y)}` } } }
-      }
-    });
-
-    // Expense by category (doughnut)
-    const byCat = {};
-    rows.filter(r => r.type === 'expense').forEach(r => { byCat[r.category] = (byCat[r.category] || 0) + r.amount; });
-    const pieLabels = Object.keys(byCat).sort((a,b) => byCat[b] - byCat[a]);
-    const pieData = pieLabels.map(l => byCat[l]);
-
-    const ctxPie = document.getElementById('pieChart');
-    if (pieChart) pieChart.destroy();
-    pieChart = new Chart(ctxPie, {
-      type: 'doughnut',
-      data: { labels: pieLabels, datasets: [{ data: pieData }] },
-      options: { plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: c => `${c.label}: ${fmtCurrency(c.parsed)}` } } } }
-    });
-  }
-
-  function renderAll() {
-    if (!MAPPING.date || !MAPPING.amount) return; // need minimum mapping
-    const rows = transformRows();
-    renderFiltersMeta(rows);
-    const filtered = applyFilters(rows);
-    const sorted = sortRows(filtered);
-    renderKPIs(filtered);
-    renderTable(sorted);
-    renderCharts(filtered);
-  }
-
-  // --- Export CSV ---
-  function exportCsv(rows) {
-    if (!rows.length) { toast('Nothing to export.'); return; }
-    const headers = ['Date','Description','Category','Type','Amount'];
-    const lines = [headers.join(',')];
-    const q = s => '"' + String(s).replace(/"/g,'""') + '"';
-    for (const r of rows) {
-      lines.push([r.date.toISOString().slice(0,10), r.desc, r.category, r.type, (r.type==='expense'?-r.amount:r.amount)].map(q).join(','));
-    }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'transactions_filtered.csv'; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  // --- Events ---
-  addLinkBtn.addEventListener('click', () => { addLink(csvUrl.value); csvUrl.value=''; });
-  loadBtn.addEventListener('click', loadData);
+  // ===== Events =====
+  brandColor.addEventListener('input', (e)=>{ SETTINGS.brand=e.target.value; document.documentElement.style.setProperty('--brand', SETTINGS.brand); localStorage.setItem(LS_KEYS.settings, JSON.stringify(SETTINGS)); });
+  addLinkBtn.addEventListener('click', ()=>{ addLink(csvUrl.value); csvUrl.value=''; });
+  loadBtn.addEventListener('click', ()=>loadData());
+  refreshBtn.addEventListener('click', ()=>loadData({bypassCache:true}));
+  loadSampleBtn.addEventListener('click', ()=>{ const sample=`Date,Description,Category,Type,Amount\n2025-01-01,Salary Payment,Job Income,Income,2500\n2025-01-03,Grocery Store,Food,Expense,-120.75\n2025-01-05,Freelance Project,Side Hustle,Income,600\n2025-01-07,Electricity Bill,Utilities,Expense,-80.5\n2025-01-10,Coffee Shop,Food,Expense,-15\n2025-01-12,Stock Dividend,Investment,Income,45.3`; RAW_HEADERS=new Set(['Date','Description','Category','Type','Amount']); RAW_ROWS=Papa.parse(sample,{header:true}).data; renderMappingSelectors(); renderAll(); toast('Loaded sample data.'); });
   remapBtn.addEventListener('click', renderMappingSelectors);
   saveSettingsBtn.addEventListener('click', saveSettings);
   applyMappingBtn.addEventListener('click', applyMappingFromUI);
-  aboutBtn.addEventListener('click', () => aboutModal.showModal());
-  resetBtn.addEventListener('click', () => { if(confirm('Clear saved links, mapping, and settings?')) { localStorage.removeItem(LS_KEYS.links); localStorage.removeItem(LS_KEYS.mapping); localStorage.removeItem(LS_KEYS.settings); location.reload(); } });
+  aboutBtn.addEventListener('click', ()=> aboutModal.showModal());
+  resetBtn.addEventListener('click', ()=>{ if(confirm('Clear saved links, mapping, cache, and settings?')){ localStorage.removeItem(LS_KEYS.links); localStorage.removeItem(LS_KEYS.mapping); localStorage.removeItem(LS_KEYS.settings); localStorage.removeItem(LS_KEYS.cache); location.reload(); } });
 
-  applyFiltersBtn.addEventListener('click', () => {
-    FILTERS.from = fromDate.value || null;
-    FILTERS.to = toDate.value || null;
-    FILTERS.type = filterType.value;
-    FILTERS.category = filterCat.value;
-    renderAll();
-  });
+  document.querySelectorAll('th[data-sort]').forEach(th=> th.addEventListener('click', ()=>{ const key=th.getAttribute('data-sort'); if(SORT.key===key) SORT.dir= (SORT.dir==='asc')?'desc':'asc'; else { SORT.key=key; SORT.dir='asc'; } renderAll(); }));
 
-  exportBtn.addEventListener('click', () => exportCsv(sortRows(applyFilters(transformRows()))));
+  document.getElementById('applyFiltersBtn').addEventListener('click', ()=>{ FILTERS.from=fromDate.value||null; FILTERS.to=toDate.value||null; FILTERS.type=filterType.value; FILTERS.category=filterCat.value; FILTERS.search=searchBox.value||''; PAGE.index=1; renderAll(); });
+  exportBtn.addEventListener('click', ()=> exportCsv(sortRows(applyFilters(transformRows()))));
+  exportCatBtn.addEventListener('click', ()=> exportCat(sortRows(applyFilters(transformRows()))));
+  exportAlertsBtn.addEventListener('click', ()=> exportAlerts(sortRows(applyFilters(transformRows()))));
+  prevPage.addEventListener('click', ()=>{ PAGE.index=Math.max(1, PAGE.index-1); renderAll(); });
+  nextPage.addEventListener('click', ()=>{ PAGE.index=PAGE.index+1; renderAll(); });
 
-  // Table sorting
-  document.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => {
-    const key = th.getAttribute('data-sort');
-    if (SORT.key === key) SORT.dir = (SORT.dir === 'asc') ? 'desc' : 'asc';
-    else { SORT.key = key; SORT.dir = 'asc'; }
-    renderAll();
-  }));
+  // Global search shortcut
+  window.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); searchBox.focus(); } });
 
-  // Utility: escape HTML
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>\"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s]));
-  }
+  // URL param: ?csv=url1,url2
+  (function initParams(){ const csv=qs('csv'); if(csv){ const list=csv.split(',').map(decodeURIComponent); list.forEach(u=>addLink(u)); } })();
 
   // Init
-  (function init(){
-    renderLinks();
-    renderMappingSelectors();
-  })();
+  (function init(){ renderLinks(); const savedSettings=JSON.parse(localStorage.getItem(LS_KEYS.settings)||'null'); if(savedSettings){ SETTINGS={...SETTINGS, ...savedSettings}; document.documentElement.style.setProperty('--brand', SETTINGS.brand||'#2563eb'); } currencySel.value=SETTINGS.currency; localeSel.value=SETTINGS.locale; rowsPerPage.value=SETTINGS.rowsPerPage; startingBalance.value=SETTINGS.startingBalance; lowThreshold.value=SETTINGS.lowThreshold; brandColor.value=SETTINGS.brand; })();
+
+  // Utility
+  function escapeHtml(str){ return String(str).replace(/[&<>\"]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s])); }
   </script>
 </body>
 </html>
