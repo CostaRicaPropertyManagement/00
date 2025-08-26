@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Income / Outcome Dashboard</title>
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Papa Parse -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    /* Hide number input spinners (for some browsers) */
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <h1 class="text-2xl font-bold tracking-tight">💰 Income / Outcome Dashboard</h1>
+      <div class="flex items-center gap-2 text-sm">
+        <button id="aboutBtn" class="px-3 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">How to use</button>
+        <button id="resetBtn" class="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Reset</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <!-- Links input -->
+    <section class="bg-white rounded-2xl shadow p-4">
+      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div class="grow">
+          <label class="block text-sm font-medium mb-1" for="csvUrl">Published CSV link from Google Sheets</label>
+          <input id="csvUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv" class="w-full border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400" />
+          <p class="text-xs text-slate-500 mt-1">Tip: In Google Sheets → <em>File → Share → Publish to web</em> → select your tab → format: <strong>CSV</strong> → copy the link.</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="addLinkBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800">Add link</button>
+          <button id="loadBtn" class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100">Load data</button>
+        </div>
+      </div>
+      <div id="linkList" class="mt-4 hidden">
+        <h3 class="font-semibold mb-2">Saved links</h3>
+        <ul id="linksUl" class="grid md:grid-cols-2 gap-2"></ul>
+      </div>
+    </section>
+
+    <!-- Mapping & Settings -->
+    <section class="bg-white rounded-2xl shadow p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Column Mapping & Settings</h2>
+        <button id="remapBtn" class="text-sm px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">Auto‑detect</button>
+      </div>
+      <div class="grid md:grid-cols-5 gap-4 mt-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Date</label>
+          <select id="mapDate" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Description</label>
+          <select id="mapDesc" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Category</label>
+          <select id="mapCat" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Type (Income/Outcome)</label>
+          <select id="mapType" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Amount</label>
+          <select id="mapAmt" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-4 gap-4 mt-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Currency</label>
+          <select id="currency" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Locale (number format)</label>
+          <select id="locale" class="w-full border border-slate-300 rounded-xl px-3 py-2"></select>
+        </div>
+        <div class="flex items-end"><button id="saveSettingsBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 w-full">Save settings</button></div>
+        <div class="flex items-end"><button id="applyMappingBtn" class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 w-full">Apply mapping</button></div>
+      </div>
+    </section>
+
+    <!-- Filters -->
+    <section class="bg-white rounded-2xl shadow p-4">
+      <div class="grid md:grid-cols-5 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">From</label>
+          <input id="fromDate" type="date" class="w-full border border-slate-300 rounded-xl px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">To</label>
+          <input id="toDate" type="date" class="w-full border border-slate-300 rounded-xl px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Type</label>
+          <select id="filterType" class="w-full border border-slate-300 rounded-xl px-3 py-2">
+            <option value="all">All</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Category</label>
+          <select id="filterCat" class="w-full border border-slate-300 rounded-xl px-3 py-2">
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div class="flex items-end gap-2">
+          <button id="applyFiltersBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 w-full">Apply</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="grid md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-2xl shadow p-4">
+        <div class="text-slate-500 text-sm">Total Income</div>
+        <div id="kpiIncome" class="mt-2 text-2xl font-semibold">—</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-4">
+        <div class="text-slate-500 text-sm">Total Expenses</div>
+        <div id="kpiExpense" class="mt-2 text-2xl font-semibold">—</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-4">
+        <div class="text-slate-500 text-sm">Net</div>
+        <div id="kpiNet" class="mt-2 text-2xl font-semibold">—</div>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-2xl shadow p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">Monthly Income vs Expense</h3>
+          <button id="resetZoomBar" class="text-sm px-2 py-1 rounded-lg border border-slate-300 hover:bg-slate-50">Reset zoom</button>
+        </div>
+        <canvas id="barChart" height="120"></canvas>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">Expense Breakdown by Category</h3>
+          <button id="resetPie" class="text-sm px-2 py-1 rounded-lg border border-slate-300 hover:bg-slate-50">Reset</button>
+        </div>
+        <canvas id="pieChart" height="120"></canvas>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section class="bg-white rounded-2xl shadow">
+      <div class="p-4 flex items-center justify-between">
+        <h3 class="font-semibold">Transactions</h3>
+        <div class="flex gap-2">
+          <button id="exportBtn" class="text-sm px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50">Export filtered CSV</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-100">
+            <tr>
+              <th data-sort="date" class="px-4 py-2 text-left cursor-pointer">Date</th>
+              <th data-sort="desc" class="px-4 py-2 text-left cursor-pointer">Description</th>
+              <th data-sort="category" class="px-4 py-2 text-left cursor-pointer">Category</th>
+              <th data-sort="type" class="px-4 py-2 text-left cursor-pointer">Type</th>
+              <th data-sort="amount" class="px-4 py-2 text-right cursor-pointer">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div id="tableHint" class="p-4 text-xs text-slate-500">Click a header to sort. Showing <span id="rowCount">0</span> rows.</div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-500 py-8">Built for GitHub Pages · Works with Google Sheets “Publish to the web → CSV” links · No server required</footer>
+  </main>
+
+  <!-- About Modal -->
+  <dialog id="aboutModal" class="rounded-2xl p-0 w-full max-w-xl">
+    <div class="p-5 space-y-3">
+      <h3 class="text-lg font-semibold">How to use</h3>
+      <ol class="list-decimal list-inside space-y-1 text-sm text-slate-700">
+        <li>Open your Google Sheet → <strong>File → Share → Publish to web</strong>.</li>
+        <li>Choose the tab that contains your transactions and set format to <strong>CSV</strong>.</li>
+        <li>Copy the link and paste it above. Add multiple links if you have multiple tabs/files.</li>
+        <li>Click <strong>Load data</strong>. Then confirm or adjust the column mapping.</li>
+        <li>Set your currency/locale and click <strong>Save settings</strong>.</li>
+      </ol>
+      <p class="text-xs text-slate-500">Expected columns (any order): Date, Description, Category, Type (Income/Outcome), Amount. If Type is missing, the sign of Amount is used to infer Income vs Expense.</p>
+      <div class="pt-2 text-right"><button class="px-3 py-2 rounded-xl bg-slate-900 text-white" onclick="aboutModal.close()">Close</button></div>
+    </div>
+  </dialog>
+
+  <script>
+  // --- Local Storage Keys ---
+  const LS_KEYS = {
+    links: 'io_links',
+    mapping: 'io_mapping',
+    settings: 'io_settings'
+  };
+
+  // --- State ---
+  let RAW_HEADERS = new Set();
+  let RAW_ROWS = []; // Array of objects from Papa (merged from all CSVs)
+  let MAPPING = { date: '', desc: '', category: '', type: '', amount: '' };
+  let SETTINGS = { currency: 'USD', locale: navigator.language || 'en-US' };
+  let FILTERS = { from: null, to: null, type: 'all', category: 'all' };
+  let SORT = { key: 'date', dir: 'desc' };
+
+  // --- Currency & Locale options ---
+  const COMMON_CURRENCIES = ['USD','CRC','EUR','GBP','CAD','MXN'];
+  const COMMON_LOCALES = ['en-US','es-CR','es-ES','en-GB','fr-FR'];
+
+  const currencySel = document.getElementById('currency');
+  const localeSel = document.getElementById('locale');
+
+  function populateSelectOptions() {
+    // currency
+    currencySel.innerHTML = COMMON_CURRENCIES.map(c => `<option value="${c}">${c}</option>`).join('');
+    // locale
+    localeSel.innerHTML = COMMON_LOCALES.map(l => `<option value="${l}">${l}</option>`).join('');
+  }
+  populateSelectOptions();
+
+  // --- UI Elements ---
+  const linksUl = document.getElementById('linksUl');
+  const linkList = document.getElementById('linkList');
+  const csvUrl = document.getElementById('csvUrl');
+  const addLinkBtn = document.getElementById('addLinkBtn');
+  const loadBtn = document.getElementById('loadBtn');
+  const remapBtn = document.getElementById('remapBtn');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const applyMappingBtn = document.getElementById('applyMappingBtn');
+  const aboutBtn = document.getElementById('aboutBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  const mapDate = document.getElementById('mapDate');
+  const mapDesc = document.getElementById('mapDesc');
+  const mapCat  = document.getElementById('mapCat');
+  const mapType = document.getElementById('mapType');
+  const mapAmt  = document.getElementById('mapAmt');
+
+  const fromDate = document.getElementById('fromDate');
+  const toDate = document.getElementById('toDate');
+  const filterType = document.getElementById('filterType');
+  const filterCat = document.getElementById('filterCat');
+  const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+
+  const kpiIncome = document.getElementById('kpiIncome');
+  const kpiExpense = document.getElementById('kpiExpense');
+  const kpiNet = document.getElementById('kpiNet');
+  const tbody = document.getElementById('tbody');
+  const rowCount = document.getElementById('rowCount');
+  const exportBtn = document.getElementById('exportBtn');
+
+  const aboutModal = document.getElementById('aboutModal');
+
+  // --- Helpers ---
+  const SYNS = {
+    date: ['date','fecha','transaction date','posted','day'],
+    desc: ['description','details','memo','note','concept','concepto'],
+    category: ['category','categoría','categoria','type of expense','group'],
+    type: ['type','income/outcome','income/expense','flow','in/out','io','credit/debit','cr/dr'],
+    amount: ['amount','monto','importe','value','total','debit','credit','dr','cr']
+  };
+
+  function normalizeHeader(s) {
+    return String(s || '').trim().toLowerCase().replace(/\s+/g,' ');
+  }
+
+  function guessHeader(headers, kind) {
+    const candidates = SYNS[kind];
+    const normHeaders = headers.map(h => normalizeHeader(h));
+    // Prefer exact contains
+    for (const syn of candidates) {
+      const idx = normHeaders.findIndex(h => h === syn || h.includes(syn));
+      if (idx !== -1) return headers[idx];
+    }
+    // Special handling: amount – prefer column that looks numeric in sample rows
+    if (kind === 'amount') {
+      return headers.find(h => /amount|importe|monto|total|value|debit|credit|dr|cr/i.test(h)) || headers[0];
+    }
+    // Fallback to first header
+    return headers[0];
+  }
+
+  function renderMappingSelectors() {
+    const headers = Array.from(RAW_HEADERS);
+    const opts = ['<option value="">—</option>'].concat(headers.map(h => `<option value="${h}">${h}</option>`)).join('');
+    mapDate.innerHTML = opts; mapDesc.innerHTML = opts; mapCat.innerHTML = opts; mapType.innerHTML = opts; mapAmt.innerHTML = opts;
+
+    // Apply remembered mapping or guess
+    const saved = JSON.parse(localStorage.getItem(LS_KEYS.mapping) || 'null');
+    if (saved && headers.length) {
+      MAPPING = saved;
+    } else if (headers.length) {
+      MAPPING.date = guessHeader(headers, 'date');
+      MAPPING.desc = guessHeader(headers, 'desc');
+      MAPPING.category = guessHeader(headers, 'category');
+      MAPPING.type = guessHeader(headers, 'type');
+      MAPPING.amount = guessHeader(headers, 'amount');
+    }
+
+    mapDate.value = MAPPING.date || '';
+    mapDesc.value = MAPPING.desc || '';
+    mapCat.value  = MAPPING.category || '';
+    mapType.value = MAPPING.type || '';
+    mapAmt.value  = MAPPING.amount || '';
+
+    // Settings
+    const savedSettings = JSON.parse(localStorage.getItem(LS_KEYS.settings) || 'null');
+    if (savedSettings) SETTINGS = savedSettings;
+    currencySel.value = SETTINGS.currency;
+    localeSel.value = SETTINGS.locale;
+  }
+
+  function saveSettings() {
+    SETTINGS.currency = currencySel.value;
+    SETTINGS.locale = localeSel.value;
+    localStorage.setItem(LS_KEYS.settings, JSON.stringify(SETTINGS));
+    toast('Settings saved.');
+    renderAll();
+  }
+
+  function applyMappingFromUI() {
+    MAPPING = {
+      date: mapDate.value,
+      desc: mapDesc.value,
+      category: mapCat.value,
+      type: mapType.value,
+      amount: mapAmt.value
+    };
+    localStorage.setItem(LS_KEYS.mapping, JSON.stringify(MAPPING));
+    toast('Mapping applied.');
+    renderAll();
+  }
+
+  function parseAmount(val) {
+    if (val == null) return NaN;
+    let s = String(val).trim();
+    if (!s) return NaN;
+    // Handle parentheses negatives and currency symbols
+    const neg = /^\(.*\)$/.test(s);
+    s = s.replace(/[()]/g,'');
+    // Remove all non-digit/.,-/ characters
+    s = s.replace(/[^0-9,.-]/g,'');
+    // If both comma and dot appear, assume comma is thousands
+    if (s.includes(',') && s.includes('.')) s = s.replace(/,/g,'');
+    // If only comma appears, assume it's decimal
+    else if (s.includes(',') && !s.includes('.')) s = s.replace(/,/g,'.');
+    const n = parseFloat(s);
+    if (isNaN(n)) return NaN;
+    return neg ? -n : n;
+  }
+
+  function inferType(typeVal, amountVal) {
+    if (typeVal != null && String(typeVal).trim() !== '') {
+      const v = normalizeHeader(typeVal);
+      if (/income|ingreso|credit|cr|in\b/.test(v)) return 'income';
+      if (/expense|outcome|egreso|debit|dr|out\b/.test(v)) return 'expense';
+    }
+    if (typeof amountVal === 'number' && !isNaN(amountVal)) {
+      return amountVal < 0 ? 'expense' : 'income';
+    }
+    return 'expense';
+  }
+
+  function fmtCurrency(n) {
+    try {
+      return new Intl.NumberFormat(SETTINGS.locale, { style: 'currency', currency: SETTINGS.currency }).format(n);
+    } catch {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+    }
+  }
+
+  function monthKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+
+  function parseDate(val) {
+    if (!val) return null;
+    // Try native Date parse, then dd/mm/yyyy
+    const d1 = new Date(val);
+    if (!isNaN(d1)) return d1;
+    const m = String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+    if (m) {
+      const [_, d, mth, y] = m;
+      const year = y.length === 2 ? (2000 + parseInt(y)) : parseInt(y);
+      const dt = new Date(year, parseInt(mth)-1, parseInt(d));
+      if (!isNaN(dt)) return dt;
+    }
+    return null;
+  }
+
+  function uniq(arr) { return Array.from(new Set(arr)); }
+
+  function toast(msg) {
+    const el = document.createElement('div');
+    el.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-3 py-2 rounded-xl shadow';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2000);
+  }
+
+  // --- Load saved links ---
+  function getLinks() {
+    try { return JSON.parse(localStorage.getItem(LS_KEYS.links) || '[]'); } catch { return []; }
+  }
+  function setLinks(list) {
+    localStorage.setItem(LS_KEYS.links, JSON.stringify(list));
+    renderLinks();
+  }
+  function addLink(url) {
+    const clean = String(url || '').trim();
+    if (!clean) return;
+    const list = getLinks();
+    if (!list.includes(clean)) list.push(clean);
+    setLinks(list);
+  }
+  function removeLink(url) {
+    const list = getLinks().filter(u => u !== url);
+    setLinks(list);
+  }
+  function renderLinks() {
+    const list = getLinks();
+    linkList.classList.toggle('hidden', list.length === 0);
+    linksUl.innerHTML = list.map(u => `
+      <li class="flex items-center justify-between gap-3 p-2 border border-slate-200 rounded-xl">
+        <a href="${u}" target="_blank" class="truncate text-slate-700 hover:underline flex-1">${u}</a>
+        <button data-url="${u}" class="removeLink text-sm px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">Remove</button>
+      </li>`).join('');
+    linksUl.querySelectorAll('.removeLink').forEach(btn => btn.addEventListener('click', e => removeLink(e.currentTarget.dataset.url)));
+  }
+
+  // --- Fetch & Parse CSVs ---
+  async function fetchCsv(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+    const text = await res.text();
+    return new Promise((resolve, reject) => {
+      Papa.parse(text, { header: true, dynamicTyping: false, skipEmptyLines: true, complete: r => resolve(r.data), error: reject });
+    });
+  }
+
+  async function loadData() {
+    const list = getLinks();
+    if (list.length === 0) { toast('Add at least one CSV link.'); return; }
+
+    RAW_HEADERS = new Set();
+    RAW_ROWS = [];
+
+    loadBtn.disabled = true; loadBtn.textContent = 'Loading…';
+    try {
+      for (const url of list) {
+        const rows = await fetchCsv(url);
+        if (rows && rows.length) {
+          RAW_ROWS.push(...rows);
+          Object.keys(rows[0]).forEach(h => RAW_HEADERS.add(h));
+        }
+      }
+      if (RAW_ROWS.length === 0) {
+        toast('No rows found. Check your links or sheet tab.');
+        return;
+      }
+      renderMappingSelectors();
+      renderAll();
+      toast('Data loaded.');
+    } catch (e) {
+      console.error(e);
+      alert('Error while loading CSVs: ' + e.message);
+    } finally {
+      loadBtn.disabled = false; loadBtn.textContent = 'Load data';
+    }
+  }
+
+  // --- Transform rows according to mapping ---
+  function transformRows() {
+    if (!RAW_ROWS.length) return [];
+    const dK = MAPPING.date, deK = MAPPING.desc, cK = MAPPING.category, tK = MAPPING.type, aK = MAPPING.amount;
+    const out = [];
+    for (const r of RAW_ROWS) {
+      const d = parseDate(r[dK]);
+      const amtRaw = r[aK];
+      const amt = parseAmount(amtRaw);
+      if (!d || isNaN(amt)) continue;
+      const t = inferType(r[tK], amt);
+      const absAmt = Math.abs(amt);
+      out.push({
+        date: d,
+        desc: String(r[deK] ?? '').trim(),
+        category: String(r[cK] ?? '').trim() || '(Uncategorized)',
+        type: t,
+        amount: absAmt,
+      });
+    }
+    return out;
+  }
+
+  function applyFilters(rows) {
+    let res = rows.slice();
+    // Dates
+    if (FILTERS.from) {
+      const f = new Date(FILTERS.from);
+      res = res.filter(x => x.date >= f);
+    }
+    if (FILTERS.to) {
+      const t = new Date(FILTERS.to);
+      // include entire day
+      t.setHours(23,59,59,999);
+      res = res.filter(x => x.date <= t);
+    }
+    // Type
+    if (FILTERS.type !== 'all') res = res.filter(x => x.type === FILTERS.type);
+    // Category
+    if (FILTERS.category !== 'all') res = res.filter(x => x.category === FILTERS.category);
+    return res;
+  }
+
+  function sortRows(rows) {
+    const dir = SORT.dir === 'asc' ? 1 : -1;
+    return rows.sort((a,b) => {
+      const k = SORT.key;
+      if (k === 'amount') return (a.amount - b.amount) * dir;
+      if (k === 'date') return (a.date - b.date) * dir;
+      const av = (a[k] || '').toString().toLowerCase();
+      const bv = (b[k] || '').toString().toLowerCase();
+      return av < bv ? -1*dir : av > bv ? 1*dir : 0;
+    });
+  }
+
+  // --- Renderers ---
+  let barChart, pieChart;
+
+  function renderKPIs(rows) {
+    const income = rows.filter(x => x.type === 'income').reduce((s,x) => s + x.amount, 0);
+    const expense = rows.filter(x => x.type === 'expense').reduce((s,x) => s + x.amount, 0);
+    kpiIncome.textContent = fmtCurrency(income);
+    kpiExpense.textContent = fmtCurrency(expense);
+    kpiNet.textContent = fmtCurrency(income - expense);
+  }
+
+  function renderFiltersMeta(rows) {
+    // Populate category filter
+    const cats = uniq(rows.map(x => x.category)).sort((a,b) => a.localeCompare(b));
+    filterCat.innerHTML = '<option value="all">All</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
+  function renderTable(rows) {
+    const fmt = (d) => d.toISOString().slice(0,10);
+    const fmtAmt = (n, type) => `${type === 'expense' ? '-' : ''}${fmtCurrency(n)}`;
+    tbody.innerHTML = rows.map(r => `
+      <tr class="border-t border-slate-100">
+        <td class="px-4 py-2 whitespace-nowrap">${fmt(r.date)}</td>
+        <td class="px-4 py-2">${escapeHtml(r.desc) || '<span class=\'text-slate-400\'>(No description)</span>'}</td>
+        <td class="px-4 py-2">${escapeHtml(r.category)}</td>
+        <td class="px-4 py-2">${r.type === 'income' ? 'Income' : 'Expense'}</td>
+        <td class="px-4 py-2 text-right">${fmtAmt(r.amount, r.type)}</td>
+      </tr>`).join('');
+    rowCount.textContent = rows.length;
+  }
+
+  function renderCharts(rows) {
+    // Monthly income/expense
+    const buckets = {};
+    for (const r of rows) {
+      const key = monthKey(r.date);
+      if (!buckets[key]) buckets[key] = { income: 0, expense: 0 };
+      buckets[key][r.type] += r.amount;
+    }
+    const labels = Object.keys(buckets).sort();
+    const income = labels.map(k => buckets[k].income);
+    const expense = labels.map(k => buckets[k].expense);
+
+    const ctxBar = document.getElementById('barChart');
+    if (barChart) barChart.destroy();
+    barChart = new Chart(ctxBar, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Income', data: income },
+          { label: 'Expense', data: expense }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.parsed.y)}` } } }
+      }
+    });
+
+    // Expense by category (doughnut)
+    const byCat = {};
+    rows.filter(r => r.type === 'expense').forEach(r => { byCat[r.category] = (byCat[r.category] || 0) + r.amount; });
+    const pieLabels = Object.keys(byCat).sort((a,b) => byCat[b] - byCat[a]);
+    const pieData = pieLabels.map(l => byCat[l]);
+
+    const ctxPie = document.getElementById('pieChart');
+    if (pieChart) pieChart.destroy();
+    pieChart = new Chart(ctxPie, {
+      type: 'doughnut',
+      data: { labels: pieLabels, datasets: [{ data: pieData }] },
+      options: { plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: c => `${c.label}: ${fmtCurrency(c.parsed)}` } } } }
+    });
+  }
+
+  function renderAll() {
+    if (!MAPPING.date || !MAPPING.amount) return; // need minimum mapping
+    const rows = transformRows();
+    renderFiltersMeta(rows);
+    const filtered = applyFilters(rows);
+    const sorted = sortRows(filtered);
+    renderKPIs(filtered);
+    renderTable(sorted);
+    renderCharts(filtered);
+  }
+
+  // --- Export CSV ---
+  function exportCsv(rows) {
+    if (!rows.length) { toast('Nothing to export.'); return; }
+    const headers = ['Date','Description','Category','Type','Amount'];
+    const lines = [headers.join(',')];
+    const q = s => '"' + String(s).replace(/"/g,'""') + '"';
+    for (const r of rows) {
+      lines.push([r.date.toISOString().slice(0,10), r.desc, r.category, r.type, (r.type==='expense'?-r.amount:r.amount)].map(q).join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'transactions_filtered.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // --- Events ---
+  addLinkBtn.addEventListener('click', () => { addLink(csvUrl.value); csvUrl.value=''; });
+  loadBtn.addEventListener('click', loadData);
+  remapBtn.addEventListener('click', renderMappingSelectors);
+  saveSettingsBtn.addEventListener('click', saveSettings);
+  applyMappingBtn.addEventListener('click', applyMappingFromUI);
+  aboutBtn.addEventListener('click', () => aboutModal.showModal());
+  resetBtn.addEventListener('click', () => { if(confirm('Clear saved links, mapping, and settings?')) { localStorage.removeItem(LS_KEYS.links); localStorage.removeItem(LS_KEYS.mapping); localStorage.removeItem(LS_KEYS.settings); location.reload(); } });
+
+  applyFiltersBtn.addEventListener('click', () => {
+    FILTERS.from = fromDate.value || null;
+    FILTERS.to = toDate.value || null;
+    FILTERS.type = filterType.value;
+    FILTERS.category = filterCat.value;
+    renderAll();
+  });
+
+  exportBtn.addEventListener('click', () => exportCsv(sortRows(applyFilters(transformRows()))));
+
+  // Table sorting
+  document.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => {
+    const key = th.getAttribute('data-sort');
+    if (SORT.key === key) SORT.dir = (SORT.dir === 'asc') ? 'desc' : 'asc';
+    else { SORT.key = key; SORT.dir = 'asc'; }
+    renderAll();
+  }));
+
+  // Utility: escape HTML
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>\"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s]));
+  }
+
+  // Init
+  (function init(){
+    renderLinks();
+    renderMappingSelectors();
+  })();
+  </script>
+</body>
+</html>
