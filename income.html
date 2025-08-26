@@ -470,6 +470,23 @@
   const monthKey=d=> d.getFullYear()+ '-' + String(d.getMonth()+1).padStart(2,'0');
   function parseDate(val){ if(!val) return null; const d1=new Date(val); if(!isNaN(d1)) return d1; const m=String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); if(m){ const [_,d,mth,y]=m; const year=y.length===2?(2000+parseInt(y)):parseInt(y); const dt=new Date(year,parseInt(mth)-1,parseInt(d)); if(!isNaN(dt)) return dt; } return null; }
 
+  // ===== Transform =====
+  function transformRows(){
+    const rows=[];
+    if(!MAPPING.date || !MAPPING.amount) return rows;
+    for(const r of RAW_ROWS){
+      const d = parseDate(r[MAPPING.date]);
+      const amtRaw = parseAmount(r[MAPPING.amount]);
+      if(!d || isNaN(amtRaw)) continue;
+      const desc = (r[MAPPING.desc] ?? '').toString();
+      const cat  = (r[MAPPING.category] ?? 'Uncategorized').toString() || 'Uncategorized';
+      const t    = inferType(r[MAPPING.type], amtRaw);
+      const amt  = Math.abs(amtRaw);
+      rows.push({ date:d, desc:desc, category:cat, type:t, amount:amt });
+    }
+    return rows;
+  }
+
   // ===== Filter/Sort/Paginate =====
   function applyFilters(rows){ let res=rows.slice(); if(FILTERS.from){ const f=new Date(FILTERS.from); res=res.filter(x=>x.date>=f); } if(FILTERS.to){ const t=new Date(FILTERS.to); t.setHours(23,59,59,999); res=res.filter(x=>x.date<=t); } if(FILTERS.type!=='all') res=res.filter(x=>x.type===FILTERS.type); if(FILTERS.category!=='all') res=res.filter(x=>x.category===FILTERS.category); if(FILTERS.search){ const q=FILTERS.search.toLowerCase(); res=res.filter(x=> (x.desc.toLowerCase().includes(q) || x.category.toLowerCase().includes(q)) ); } return res; }
   function sortRows(rows){ const dir=SORT.dir==='asc'?1:-1; return rows.sort((a,b)=>{ const k=SORT.key; if(k==='amount') return (a.amount-b.amount)*dir; if(k==='date') return (a.date-b.date)*dir; const av=(a[k]||'').toString().toLowerCase(); const bv=(b[k]||'').toString().toLowerCase(); return av<bv? -1*dir : av>bv? 1*dir : 0; }); }
@@ -482,7 +499,56 @@
   function renderTable(rows){ const fmt=d=>d.toISOString().slice(0,10); const fmtAmt=(n,type)=>`${type==='expense'?'-':''}${fmtCurrency(n)}`; const {slice,totalPages,totalRows}=paginate(rows); tbody.innerHTML=slice.map(r=>`<tr class="border-t border-slate-200"><td class="px-4 py-2 whitespace-nowrap">${fmt(r.date)}</td><td class="px-4 py-2">${escapeHtml(r.desc)||'<span class=\'text-slate-400\'>(No description)</span>'}</td><td class="px-4 py-2">${escapeHtml(r.category)}</td><td class="px-4 py-2">${r.type==='income'?'Income':'Expense'}</td><td class="px-4 py-2 text-right">${fmtAmt(r.amount, r.type)}</td></tr>`).join(''); rowCount.textContent=totalRows; pageInfo.textContent=`Page ${PAGE.index} / ${totalPages}`; prevPage.disabled=PAGE.index<=1; nextPage.disabled=PAGE.index>=totalPages; }
   function renderCategoryTotals(rows){ const byCat={}; for(const r of rows){ if(!byCat[r.category]) byCat[r.category]={expense:0,income:0}; byCat[r.category][r.type]+=r.amount; } const cats=Object.keys(byCat).sort((a,b)=> (byCat[b].expense-byCat[a].expense)); const catBody=document.getElementById('catBody'); catBody.innerHTML=cats.map(c=>`<tr class="border-t border-slate-200"><td class="px-4 py-2">${escapeHtml(c)}</td><td class="px-4 py-2 text-right">${fmtCurrency(byCat[c].expense)}</td><td class="px-4 py-2 text-right">${fmtCurrency(byCat[c].income)}</td></tr>`).join(''); }
   function renderAlerts(rows){ const sorted = rows.slice().sort((a,b)=>a.date-b.date); let bal = SETTINGS.startingBalance; const events = []; for(const r of sorted){ bal += (r.type==='income'? r.amount : -r.amount); if(bal < SETTINGS.lowThreshold){ events.push({ date: r.date, balance: bal, note: `${r.type==='expense'?'Expense':'Income'}: ${r.desc || '(no description)'}`}); } } alertsBody.innerHTML = events.length ? events.map(e=>`<tr class="border-t border-slate-200"><td class="px-4 py-2">${e.date.toISOString().slice(0,10)}</td><td class="px-4 py-2 text-right">${fmtCurrency(e.balance)}</td><td class="px-4 py-2">${escapeHtml(e.note)}</td></tr>`).join('') : `<tr><td colspan="3" class="px-4 py-3 text-slate-600 text-sm">No low-balance events based on current filters and thresholds.</td></tr>`; const recs = []; const last30 = rows.filter(r=> { const d=new Date(); d.setDate(d.getDate()-30); return r.date>=d; }); const byCat = {}; last30.filter(r=>r.type==='expense').forEach(r=> byCat[r.category]=(byCat[r.category]||0)+r.amount ); const topCats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,3); if(topCats.length){ recs.push(`Biggest expense categories (30d): ${topCats.map(([c,v])=>`${c} (${fmtCurrency(v)})`).join(', ')} — set caps or renegotiate.`); } const byDesc={}; rows.filter(r=>r.type==='expense').forEach(r=>{ const k=(r.desc||'').toLowerCase(); byDesc[k]=(byDesc[k]||{count:0,total:0,pretty:r.desc}); byDesc[k].count++; byDesc[k].total+=r.amount; }); const recurring = Object.values(byDesc).filter(x=>x.count>=3).sort((a,b)=>b.total-a.total).slice(0,3); if(recurring.length){ recs.push(`Recurring spend detected: ${recurring.map(x=>`${x.pretty} ×${x.count} (${fmtCurrency(x.total)})`).join(', ')} — consider annual plans or alternatives.`); } const now=new Date(); const startMonth=new Date(now.getFullYear(), now.getMonth(), 1); const thisMonth=rows.filter(r=>r.date>=startMonth); const incM=thisMonth.filter(x=>x.type==='income').reduce((s,x)=>s+x.amount,0); const expM=thisMonth.filter(x=>x.type==='expense').reduce((s,x)=>s+x.amount,0); if(incM && expM && expM>incM){ recs.push(`This month is negative by ${fmtCurrency(expM-incM)} — freeze non‑essential categories.`); } if(!recs.length) recs.push('Looking good! No obvious risks with the current filters.'); recsList.innerHTML = recs.map(r=>`<li>${r}</li>`).join(''); }
-  function renderCharts(rows){ const buckets={}; for(const r of rows){ const key=monthKey(r.date); if(!buckets[key]) buckets[key]={income:0,expense:0}; buckets[key][r.type]+=r.amount; } const labels=Object.keys(buckets).sort(); const income=labels.map(k=>buckets[k].income); const expense=labels.map(k=>buckets[k].expense); const ctxBar=document.getElementById('barChart'); if(barChart) barChart.destroy(); barChart=new Chart(ctxBar,{ type:'bar', data:{ labels, datasets:[{label:'Income',data:income},{label:'Expense',data:expense}] }, options:{ responsive:true, scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{position:'top'}, tooltip:{ callbacks:{ label:ctx=>`${ctx.dataset.label}: ${fmtCurrency(ctx.parsed.y)}` } } } } }); const byCat={}; rows.filter(r=>r.type==='expense').forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+r.amount; }); const pieLabels=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]); const pieData=pieLabels.map(l=>byCat[l]); const ctxPie=document.getElementById('pieChart'); if(pieChart) pieChart.destroy(); pieChart=new Chart(ctxPie,{ type:'doughnut', data:{ labels:pieLabels, datasets:[{ data:pieData }] }, options:{ plugins:{ legend:{position:'right'}, tooltip:{ callbacks:{ label:c=>`${c.label}: ${fmtCurrency(c.parsed)}` } } } } }); }
+  function renderCharts(rows){
+    // Improve chart readability (dark text, clearer grids)
+    Chart.defaults.color = '#0f172a';
+    Chart.defaults.font.size = 13;
+
+    const buckets={};
+    for(const r of rows){
+      const key=monthKey(r.date);
+      if(!buckets[key]) buckets[key]={income:0,expense:0};
+      buckets[key][r.type]+=r.amount;
+    }
+    const labels=Object.keys(buckets).sort();
+    const income=labels.map(k=>buckets[k].income);
+    const expense=labels.map(k=>buckets[k].expense);
+
+    const axisCommon = {
+      ticks: { color: '#0f172a' },
+      grid: { color: '#e2e8f0' }
+    };
+
+    const ctxBar=document.getElementById('barChart');
+    if(barChart) barChart.destroy();
+    barChart=new Chart(ctxBar,{
+      type:'bar',
+      data:{ labels, datasets:[
+        {label:'Income',data:income},
+        {label:'Expense',data:expense}
+      ] },
+      options:{
+        responsive:true,
+        scales:{ x: axisCommon, y:{ ...axisCommon, beginAtZero:true } },
+        plugins:{
+          legend:{position:'top', labels:{ color:'#0f172a' }},
+          tooltip:{ callbacks:{ label:ctx=>`${ctx.dataset.label}: ${fmtCurrency(ctx.parsed.y)}` } }
+        }
+      }
+    });
+
+    const byCat={};
+    rows.filter(r=>r.type==='expense').forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+r.amount; });
+    const pieLabels=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]);
+    const pieData=pieLabels.map(l=>byCat[l]);
+    const ctxPie=document.getElementById('pieChart');
+    if(pieChart) pieChart.destroy();
+    pieChart=new Chart(ctxPie,{
+      type:'doughnut',
+      data:{ labels:pieLabels, datasets:[{ data:pieData }] },
+      options:{ plugins:{ legend:{position:'right', labels:{ color:'#0f172a' }}, tooltip:{ callbacks:{ label:c=>`${c.label}: ${fmtCurrency(c.parsed)}` } } } }
+    });
+  }; for(const r of rows){ const key=monthKey(r.date); if(!buckets[key]) buckets[key]={income:0,expense:0}; buckets[key][r.type]+=r.amount; } const labels=Object.keys(buckets).sort(); const income=labels.map(k=>buckets[k].income); const expense=labels.map(k=>buckets[k].expense); const ctxBar=document.getElementById('barChart'); if(barChart) barChart.destroy(); barChart=new Chart(ctxBar,{ type:'bar', data:{ labels, datasets:[{label:'Income',data:income},{label:'Expense',data:expense}] }, options:{ responsive:true, scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{position:'top'}, tooltip:{ callbacks:{ label:ctx=>`${ctx.dataset.label}: ${fmtCurrency(ctx.parsed.y)}` } } } } }); const byCat={}; rows.filter(r=>r.type==='expense').forEach(r=>{ byCat[r.category]=(byCat[r.category]||0)+r.amount; }); const pieLabels=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]); const pieData=pieLabels.map(l=>byCat[l]); const ctxPie=document.getElementById('pieChart'); if(pieChart) pieChart.destroy(); pieChart=new Chart(ctxPie,{ type:'doughnut', data:{ labels:pieLabels, datasets:[{ data:pieData }] }, options:{ plugins:{ legend:{position:'right'}, tooltip:{ callbacks:{ label:c=>`${c.label}: ${fmtCurrency(c.parsed)}` } } } } }); }
   function renderAll(){ if(!MAPPING.date||!MAPPING.amount) return; const rows=transformRows(); renderFiltersMeta(rows); const filtered=applyFilters(rows); const sorted=sortRows(filtered); renderKPIs(filtered); renderTable(sorted); renderCharts(filtered); renderCategoryTotals(sorted); renderAlerts(sorted); }
 
   // ===== Export =====
