@@ -30,10 +30,13 @@
         <input id="csvUrl" type="url" placeholder="Paste Google Sheet link (/edit, /export?format=csv, /pub?output=csv, or /d/e/.../pubhtml)" class="border rounded px-3 py-2 w-80"/>
         <button id="addLinkBtn" class="btn">Add link</button>
         <button id="loadBtn" class="btn">Load</button>
-        <button id="refreshBtn" class="btn">Refresh</button>
+        <button id="refreshBtn" class="btn">Refresh (force fresh)</button>
+        <label class="inline"><input id="alwaysFresh" type="checkbox"/> Always fetch fresh</label>
+        <button id="clearCsvCacheBtn" class="btn">Purge CSV cache</button>
         <button id="loadSampleBtn" class="btn">Sample</button>
         <button id="resetBtn" class="btn">Reset</button>
       </div>
+      <div id="statusBar" class="text-xs text-slate-600 mt-1"></div>
     </header>
 
     <!-- Saved Links -->
@@ -293,11 +296,13 @@
     function cacheSet(key,val){ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); all[key]=val; localStorage.setItem(LS_KEYS.cache, JSON.stringify(all)); }
     function isProbablyHtml(text,ct){ if(ct && /text\/html/i.test(ct)) return true; const h=text.slice(0,200).toLowerCase(); return h.includes('<!doctype html')||h.includes('<html'); }
 
-    async function fetchCsvSmart(url){
-      const candidates=buildCsvCandidates(url);
-      let lastErr=null; for(const cand of candidates){ try{
+    async function fetchCsvSmart(url, {bypassCache=false}={}){
+      if(bypassCache){ cacheDeletePrefix('csv:'); }
+      const candidates=buildCsvCandidates(url, {bypassCache});
+      let lastErr=null;
+      for(const cand of candidates){ try{
         const cacheKey='csv:'+cand; const cached=cacheGet(cacheKey); if(cached){ return Papa.parse(cached,{header:true,skipEmptyLines:true}).data; }
-        const res=await fetch(cand,{cache:'no-store'}); if(!res.ok) throw new Error('HTTP '+res.status); const text=await res.text(); const ct=res.headers.get('content-type')||''; if(isProbablyHtml(text,ct)) throw new Error('HTML returned (sign-in/permissions)'); if(!/[,\n]/.test(text)) throw new Error('No CSV structure'); cacheSet(cacheKey,text); return Papa.parse(text,{header:true,skipEmptyLines:true}).data;
+        const res=await fetch(cand,{cache:'reload', headers:{'Cache-Control':'no-cache, no-store, must-revalidate','Pragma':'no-cache','Expires':'0'}}); if(!res.ok) throw new Error('HTTP '+res.status); const text=await res.text(); const ct=res.headers.get('content-type')||''; if(isProbablyHtml(text,ct)) throw new Error('HTML returned (sign-in/permissions)'); if(!/[,\n]/.test(text)) throw new Error('No CSV structure'); cacheSet(cacheKey,text); return Papa.parse(text,{header:true,skipEmptyLines:true}).data;
       }catch(e){ lastErr=e; console.warn('CSV candidate failed', cand, e.message); }}
       throw new Error('All CSV endpoints failed. Last error: '+(lastErr?lastErr.message:'unknown'));
     }
@@ -390,7 +395,7 @@
     function renderTable(rows){ const fmt=d=> d? d.toISOString().slice(0,10) : '—'; const fmtAmt=(n,t)=>`${t==='expense'?'-':''}${fmtCurrency(n)}`; const sorted=applySort(rows.slice()); const {slice,totalPages,totalRows}=paginate(sorted); tbody.innerHTML=slice.map(r=>`<tr class="border-t border-slate-200"><td class="px-3 py-2 whitespace-nowrap">${fmt(r.date)}</td><td class="px-3 py-2">${escapeHtml(r.desc)||'<span class=\'text-slate-400\'>(No description)</span>'}</td><td class="px-3 py-2">${escapeHtml(r.category)}</td><td class="px-3 py-2">${r.type==='income'?'Income':'Expense'}</td><td class="px-3 py-2 text-right">${fmtAmt(r.amount,r.type)}</td><td class="px-3 py-2 text-right">${fmtCurrency(RB.get(r.id) ?? SETTINGS.starting)}</td></tr>`).join(''); rowCount.textContent=totalRows; pageInfo.textContent=`Page ${PAGE.index} / ${totalPages}`; prevPage.disabled=PAGE.index<=1; nextPage.disabled=PAGE.index>=totalPages; }
 
     // ===== Render All =====
-    function renderAll(){ const rows=transformRows(RAW_ROWS); if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" class="px-3 py-3 text-slate-600">No valid rows parsed. Check your headers and that the tab has data.</td></tr>'; kpiIncome.textContent='—'; kpiExpense.textContent='—'; kpiNet.textContent='—'; kpiBalance.textContent='—'; balanceBadge.textContent='—'; alertsBody.innerHTML=''; recsList.innerHTML=''; return; } const kpis=computeKPIs(rows); computeRunningBalance(rows); renderAlerts(rows, kpis); renderCharts(rows); renderTable(rows); }
+    function renderAll(){ const rows=transformRows(RAW_ROWS); const status=document.getElementById('statusBar'); if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" class="px-3 py-3 text-slate-600">No valid rows parsed. Check your headers and that the tab has data.</td></tr>'; kpiIncome.textContent='—'; kpiExpense.textContent='—'; kpiNet.textContent='—'; kpiBalance.textContent='—'; balanceBadge.textContent='—'; alertsBody.innerHTML=''; recsList.innerHTML=''; if(status){ status.textContent = `Last updated ${new Date().toLocaleString()} • rows: 0`; } return; } const kpis=computeKPIs(rows); computeRunningBalance(rows); renderAlerts(rows, kpis); renderCharts(rows); renderTable(rows); if(status){ const sources=(getLinks()||[]).length; status.textContent = `Last updated ${new Date().toLocaleString()} • sources: ${sources} • rows: ${rows.length}`; } }
 
     // ===== Loaders =====
     async function loadData({bypassCache=false}={}){
@@ -406,9 +411,14 @@
 
     // ===== Events =====
     addLinkBtn.addEventListener('click',()=>{ addLink(csvUrl.value); csvUrl.value=''; });
-    loadBtn.addEventListener('click',()=>loadData());
+    loadBtn.addEventListener('click',()=>loadData({bypassCache:false}));
     refreshBtn.addEventListener('click',()=>loadData({bypassCache:true}));
-    loadSampleBtn.addEventListener('click',()=>{ const sample=`Date,Description,Category,Type,Amount\n2025-01-01,Salary,Job,Income,2500\n2025-01-03,Groceries,Food,Expense,-120.75\n2025-01-05,Freelance,Side,Income,600\n2025-01-07,Electricity,Utilities,Expense,-80.5`; RAW_ROWS=Papa.parse(sample,{header:true}).data; renderAll(); toast('Sample loaded'); });
+    document.getElementById('clearCsvCacheBtn').addEventListener('click',()=>{ cacheDeletePrefix('csv:'); toast('CSV cache purged'); });
+    loadSampleBtn.addEventListener('click',()=>{ const sample=`Date,Description,Category,Type,Amount
+2025-01-01,Salary,Job,Income,2500
+2025-01-03,Groceries,Food,Expense,-120.75
+2025-01-05,Freelance,Side,Income,600
+2025-01-07,Electricity,Utilities,Expense,-80.5`; RAW_ROWS=Papa.parse(sample,{header:true}).data; renderAll(); toast('Sample loaded'); });('click',()=>{ const sample=`Date,Description,Category,Type,Amount\n2025-01-01,Salary,Job,Income,2500\n2025-01-03,Groceries,Food,Expense,-120.75\n2025-01-05,Freelance,Side,Income,600\n2025-01-07,Electricity,Utilities,Expense,-80.5`; RAW_ROWS=Papa.parse(sample,{header:true}).data; renderAll(); toast('Sample loaded'); });
     resetBtn.addEventListener('click',()=>{ if(confirm('Clear links, settings, and cache?')){ localStorage.removeItem(LS_KEYS.links); localStorage.removeItem(LS_KEYS.settings); localStorage.removeItem(LS_KEYS.cache); location.reload(); } });
 
     document.querySelectorAll('th[data-sort]').forEach(th=> th.addEventListener('click', ()=>{ const key=th.getAttribute('data-sort'); if(SORT.key===key) SORT.dir= (SORT.dir==='asc')?'desc':'asc'; else { SORT.key=key; SORT.dir='asc'; } renderAll(); }));
