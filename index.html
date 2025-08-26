@@ -1,833 +1,375 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Contractor Assignment Console — Executive</title>
-<style>
-  :root{
-    --bg:#f6f8fb; --card:#ffffff; --ink:#0b1220; --muted:#6b7280; --line:#e6e9f2;
-    --brand:#2f66ff; --brand-weak:#e9f0ff; --ok:#16a34a; --warn:#f59e0b; --err:#ef4444;
-    --chip:#f1f3f9; --shadow:0 10px 30px rgba(25,35,60,.08);
-  }
-  *{box-sizing:border-box}
-  body{margin:0; font-family:Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial; background:linear-gradient(180deg,#f9fbff,#f2f5fb); color:var(--ink);}
-  header{position:sticky; top:0; z-index:10; background:rgba(255,255,255,.85); backdrop-filter:saturate(150%) blur(6px); border-bottom:1px solid var(--line);}
-  .nav{max-width:1280px; margin:0 auto; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px;}
-  .brand{display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.2px}
-  .badge{font-size:12px; background:var(--brand-weak); color:var(--brand); padding:4px 8px; border:1px solid #dbe4ff; border-radius:999px}
-  main{max-width:1280px; margin:24px auto 56px; padding:0 18px}
-  .grid{display:grid; grid-template-columns: 1.05fr .95fr; gap:16px}
-  @media (max-width:1100px){ .grid{grid-template-columns:1fr} }
-  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow)}
-  .card .hd{padding:14px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:12px}
-  .card .bd{padding:16px}
-  .h2{font-size:16px; font-weight:800; margin:0}
-  .muted{color:var(--muted)}
-  .row{display:grid; grid-template-columns:repeat(12,1fr); gap:12px}
-  .col-12{grid-column:span 12} .col-8{grid-column:span 8} .col-6{grid-column:span 6} .col-4{grid-column:span 4} .col-3{grid-column:span 3}
-  label{display:block; font-size:12px; font-weight:700; color:var(--muted); margin:0 0 6px; letter-spacing:.2px}
-  input[type="text"], select{width:100%; padding:11px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; outline:none}
-  input:focus, select:focus{border-color:#cbd5ff; box-shadow:0 0 0 4px #e9efff}
-  .btn{display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px; border:1px solid var(--line); background:#fff; cursor:pointer; font-weight:700}
-  .btn.primary{background:linear-gradient(180deg,#3b74ff,#2f66ff); color:#fff; border:0}
-  .btn:disabled{opacity:.6; cursor:not-allowed}
-  .chips{display:flex; flex-direction:column; gap:10px}
-  .chip{display:grid; grid-template-columns: 1fr auto; align-items:center; gap:10px; background:var(--chip); border:1px solid var(--line); padding:10px; border-radius:12px}
-  .chip .right{display:flex; gap:10px; align-items:center}
-  .capline{display:grid; grid-template-columns: 70px 1fr 48px; gap:8px; align-items:center}
-  .capline output{font-variant-numeric: tabular-nums; text-align:right}
-  .kpi{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
-  .kpi .tile{background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px}
-  .kpi .t{margin:0 0 4px; font-size:12px; color:var(--muted)}
-  .kpi .v{font-size:22px; font-weight:900}
-  .progress{height:10px; background:#eef2ff; border:1px solid #dbe4ff; border-radius:999px; overflow:hidden}
-  .progress .bar{height:100%; width:0%; background:linear-gradient(90deg,#87a9ff,#2f66ff)}
-  table{width:100%; border-collapse:separate; border-spacing:0}
-  th,td{padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top}
-  th{position:sticky; top:0; background:#fff; text-align:left; color:#5b6472; font-weight:800}
-  .chart{width:100%; height:172px; position:relative}
-  .bar{position:absolute; bottom:0; width:28px; background:linear-gradient(180deg,#87a9ff,#2f66ff); border-radius:6px 6px 0 0}
-  .bar label{position:absolute; bottom:100%; left:50%; transform:translate(-50%,-6px); font-size:11px; color:var(--muted)}
-  .legend{display:flex; gap:14px; align-items:center; margin-top:8px; color:var(--muted); font-size:12px}
-  .legend .key{width:12px; height:12px; border-radius:2px; background:linear-gradient(180deg,#87a9ff,#2f66ff); border:1px solid #dbe4ff}
-  .pill{background:var(--chip); border:1px solid var(--line); border-radius:999px; padding:6px 10px; display:inline-flex; align-items:center; gap:8px}
-  .hr{height:1px; background:linear-gradient(90deg,transparent,#e7ebf5,transparent); margin:12px 0}
-  /* Board */
-  .board{display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:12px}
-  .lane{background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px}
-  .lane .lane-hd{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
-  .meter{height:8px; border-radius:999px; background:#eef2ff; border:1px solid #dbe4ff; position:relative; overflow:hidden}
-  .meter .fill{position:absolute; left:0; top:0; height:100%; width:0%; background:linear-gradient(90deg,#a3d89a,#16a34a)}
-  .lane .cap{font-size:12px; color:var(--muted)}
-  .task{border:1px solid var(--line); background:#fbfcff; border-radius:12px; padding:10px; margin:8px 0; cursor:grab}
-  .task.dragging{opacity:.6}
-  .lane.drop-target{outline:2px dashed #99b7ff; outline-offset:2px}
-  .right{ text-align:right; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Income / Outcome Dashboard (Light)</title>
+  <!-- libs -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    :root{ --brand:#2563eb; --bg:#ffffff; --card:#f8fafc; --text:#0f172a; --muted:#475569; --border:#e2e8f0; }
+    body{background:var(--bg);color:var(--text)}
+    .card{background:var(--card);border:1px solid var(--border)}
+    .btn{border:1px solid var(--border);padding:.5rem .75rem;border-radius:.75rem;background:#fff}
+    .btn:hover{background:#f1f5f9}
+    .chip{border:1px solid var(--border);padding:.15rem .5rem;border-radius:999px;font-size:.75rem}
+    .toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:.5rem .75rem;border-radius:.75rem}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid var(--border);padding:6px;text-align:left}
+    thead{background:#eef2f7}
+  </style>
 </head>
-<body>
-<header>
-  <div class="nav">
-    <div class="brand">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l8.66 5v8L12 21l-8.66-5V8L12 3z" stroke="#2f66ff" stroke-width="1.6" fill="#e9f0ff"/></svg>
-      Contractor Assignment Console
-      <span class="badge">Executive</span>
-    </div>
-    <div class="muted">Boardroom-grade routing & workload planning</div>
-  </div>
-</header>
-
-<main>
-  <div class="grid">
-    <!-- LEFT: Planner -->
-    <section class="card">
-      <div class="hd">
-        <div class="h2">Planner</div>
-        <div id="status" class="muted">Loading…</div>
+<body class="min-h-screen">
+  <main class="max-w-6xl mx-auto p-4 space-y-4">
+    <!-- Header -->
+    <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <h1 class="text-2xl font-bold">💰 Income / Outcome Dashboard</h1>
+      <div class="flex flex-wrap gap-2 items-center">
+        <input id="csvUrl" type="url" placeholder="Paste Google Sheet link (/edit, /export?format=csv, or /pub?output=csv)" class="border rounded px-3 py-2 w-80"/>
+        <button id="addLinkBtn" class="btn">Add link</button>
+        <button id="loadBtn" class="btn">Load</button>
+        <button id="refreshBtn" class="btn">Refresh</button>
+        <button id="loadSampleBtn" class="btn">Sample</button>
+        <button id="resetBtn" class="btn">Reset</button>
       </div>
-      <div class="bd">
-        <div class="row">
-          <div class="col-12">
-            <label>Published Spreadsheet (pubhtml)</label>
-            <input id="pubhtmlUrl" type="text" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vRkKGxXCLnmlEvHZm6oeUjzSguxRia70_3dQuCIc58UAj9YmbMO0Vttx--4k3rai-JqqkLvfwlr8Mk5/pubhtml" />
-          </div>
-          <div class="col-6">
-            <label>City (from sheet)</label>
-            <select id="citySelect"><option value="">Loading…</option></select>
-          </div>
-          <div class="col-6">
-            <label>Day</label>
-            <select id="daySelect">
-              <option value="today">Today</option>
-              <option value="tomorrow">Tomorrow</option>
-            </select>
-          </div>
+    </header>
+
+    <!-- Saved Links -->
+    <section id="linkList" class="hidden card p-3 rounded-xl">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-semibold">Saved links</h2>
+        <small class="text-slate-600">Tip: add multiple, comma‑separated • use <code>?csv=URL1,URL2</code></small>
+      </div>
+      <ul id="linksUl" class="grid md:grid-cols-2 gap-2"></ul>
+    </section>
+
+    <!-- Preferences -->
+    <section class="card p-3 rounded-xl">
+      <h2 class="font-semibold mb-2">Preferences</h2>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div>
+          <label class="text-sm">Currency</label>
+          <select id="currency" class="w-full border rounded px-2 py-1">
+            <option>USD</option>
+            <option>CRC</option>
+            <option>EUR</option>
+            <option>MXN</option>
+          </select>
         </div>
-
-        <div class="hr"></div>
-
-        <div class="row">
-          <div class="col-6">
-            <label>Contractor (from Contractors!D)</label>
-            <select id="contractorSelect"><option value="">Loading…</option></select>
-          </div>
-          <div class="col-3">
-            <label>Initial Capacity</label>
-            <input id="qtyInput" type="text" placeholder="e.g., 2" />
-          </div>
-          <div class="col-3" style="display:flex; align-items:flex-end;">
-            <button id="addBtn" class="btn">Add</button>
-          </div>
-          <div class="col-12">
-            <div id="selectedWrap" class="chips" aria-live="polite"></div>
-          </div>
+        <div>
+          <label class="text-sm">Locale</label>
+          <select id="locale" class="w-full border rounded px-2 py-1">
+            <option>en-US</option>
+            <option>es-CR</option>
+            <option>es-ES</option>
+            <option>en-GB</option>
+          </select>
         </div>
+        <div>
+          <label class="text-sm">Starting Balance</label>
+          <input id="startingBalance" type="number" step="0.01" value="0" class="w-full border rounded px-2 py-1"/>
+        </div>
+        <div>
+          <label class="text-sm">Low Balance Threshold</label>
+          <input id="lowThreshold" type="number" step="0.01" value="100" class="w-full border rounded px-2 py-1"/>
+        </div>
+        <div class="flex items-end"><button id="saveSettingsBtn" class="btn w-full">Save</button></div>
+      </div>
+    </section>
 
-        <div class="hr"></div>
+    <!-- KPIs -->
+    <section class="grid md:grid-cols-4 gap-3">
+      <div class="card rounded-xl p-3"><div class="text-slate-500 text-sm">Total Income</div><div id="kpiIncome" class="text-2xl font-semibold">—</div></div>
+      <div class="card rounded-xl p-3"><div class="text-slate-500 text-sm">Total Expenses</div><div id="kpiExpense" class="text-2xl font-semibold">—</div></div>
+      <div class="card rounded-xl p-3"><div class="text-slate-500 text-sm">Net</div><div id="kpiNet" class="text-2xl font-semibold">—</div></div>
+      <div class="card rounded-xl p-3"><div class="flex items-center justify-between"><div class="text-slate-500 text-sm">Current Balance</div><span id="balanceBadge" class="chip">—</span></div><div id="kpiBalance" class="text-2xl font-semibold">—</div></div>
+    </section>
 
-        <div class="row">
-          <div class="col-12">
-            <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap">
-              <div class="stack" style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button id="runBtn" class="btn primary">Run Optimization</button>
-                <button id="resetBtn" class="btn">Reset</button>
-                <button id="autofillBtn" class="btn">Auto-fill remaining</button>
-              </div>
-              <div style="min-width:260px;">
-                <div class="progress" aria-label="Optimization progress">
-                  <div id="progressBar" class="bar" style="width:0%"></div>
-                </div>
-                <div id="progressText" class="muted" style="text-align:right; font-size:12px; margin-top:4px;">0%</div>
-              </div>
-            </div>
-            <div class="muted" style="margin-top:8px;">Distance Matrix used once per pairing. API key embedded.</div>
-          </div>
+    <!-- Watchlist & Recommendations -->
+    <section class="card p-3 rounded-xl">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-semibold">Low Balance Watchlist & Recommendations</h2>
+        <small class="text-slate-600">Includes 30‑day coverage check</small>
+      </div>
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="overflow-x-auto">
+          <table class="text-sm">
+            <thead>
+              <tr><th class="px-2 py-1">Date</th><th class="px-2 py-1 text-right">Running Balance</th><th class="px-2 py-1">Note</th></tr>
+            </thead>
+            <tbody id="alertsBody"></tbody>
+          </table>
+        </div>
+        <div>
+          <h3 class="font-semibold mb-1">Suggestions</h3>
+          <ul id="recsList" class="list-disc list-inside text-sm space-y-1"></ul>
         </div>
       </div>
     </section>
 
-    <!-- RIGHT: Overview -->
-    <section class="card">
-      <div class="hd">
-        <div class="h2">Executive Overview</div>
-        <div class="stack" style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button id="dlOptimized" class="btn" disabled>Download Optimized</button>
-          <button id="dlSummary" class="btn" disabled>Download Summary</button>
-          <button id="dlUnassignable" class="btn" disabled>Download Unassignable</button>
-        </div>
+    <!-- Charts -->
+    <section class="grid md:grid-cols-2 gap-3">
+      <div class="card rounded-xl p-3">
+        <h3 class="font-semibold mb-2">Monthly Income vs Expense</h3>
+        <canvas id="barChart" height="120" aria-label="Monthly income and expense chart" role="img"></canvas>
       </div>
-      <div class="bd">
-        <div class="kpi" id="kpis">
-          <div class="tile"><div class="t">Total Tasks</div><div class="v" id="kpiTasks">—</div></div>
-          <div class="tile"><div class="t">Assigned</div><div class="v" id="kpiAssigned">—</div></div>
-          <div class="tile"><div class="t">Unassignable</div><div class="v" id="kpiUn">—</div></div>
-          <div class="tile"><div class="t">Contractors</div><div class="v" id="kpiHM">—</div></div>
-        </div>
-        <div class="hr"></div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
-          <span class="pill">Hour (Chicago): <b id="pillHour">—</b></span>
-          <span class="pill">City: <b id="pillCity">—</b></span>
-          <span class="pill">Day: <b id="pillDay">—</b></span>
-          <span class="pill">DM Calls: <b id="pillCalls">—</b></span>
-        </div>
-        <div class="hr"></div>
-        <div class="h2" style="margin-bottom:6px;">Distance by Contractor</div>
-        <div class="chart" id="distChart"></div>
-        <div class="legend"><span class="key"></span> Total travel (miles)</div>
+      <div class="card rounded-xl p-3">
+        <h3 class="font-semibold mb-2">Expense Breakdown</h3>
+        <canvas id="pieChart" height="120" aria-label="Expense breakdown chart" role="img"></canvas>
       </div>
     </section>
-  </div>
 
-  <section class="card" style="margin-top:16px;">
-    <div class="hd"><div class="h2">Assignment Board</div><div class="muted">Drag tasks between contractors (capacity-aware). Use sliders to change capacity.</div></div>
-    <div class="bd">
-      <div id="board" class="board"></div>
-    </div>
-  </section>
-
-  <section class="card" style="margin-top:16px;">
-    <div class="hd"><div class="h2">Optimized Assignments</div><div class="muted">Nearest-contractor allocation</div></div>
-    <div class="bd" id="optTable"></div>
-  </section>
-
-  <section class="card" style="margin-top:16px;">
-    <div class="hd"><div class="h2">Distance Summary</div><div class="muted">Travel load & route links</div></div>
-    <div class="bd" id="sumTable"></div>
-  </section>
-
-  <section class="card" style="margin-top:16px;">
-    <div class="hd"><div class="h2">Unassignable Units</div><div class="muted">Outside time windows or missing data</div></div>
-    <div class="bd" id="unTable"></div>
-  </section>
-</main>
-
-<script>
-/* ===== CONFIG ===== */
-const SHEET_NAMES = {
-  CONTRACTORS: 'Contractors', // names in column D (index 3)
-  PROPERTY: 'Property Repairs & Maintenance'
-};
-// Embedded Distance Matrix API key (replace if needed)
-const DIST_API_KEY = "AIzaSyBCquBYPDA8je69fxnjKwM2y6tuNWNygwQ";
-const TZ = 'America/Chicago';
-
-/* ===== UTIL ===== */
-const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
-function chicagoHourNow(){
-  const parts = new Intl.DateTimeFormat('en-US',{hour:'numeric', hour12:false, timeZone:TZ}).formatToParts(new Date());
-  return parseInt(parts.find(p=>p.type==='hour')?.value || '0', 10);
-}
-function cleanName(s){ return s ? String(s).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase() : ''; }
-function getColumnMap(header){ const m={}; header.forEach((h,i)=> m[String(h).trim().toLowerCase()] = i); return m; }
-function parseCSV(text){
-  const rows=[]; let cur=[]; let val=''; let inQ=false;
-  for(let i=0;i<text.length;i++){
-    const ch=text[i];
-    if(inQ){
-      if(ch==='"' && text[i+1]==='"'){ val+='"'; i++; continue; }
-      if(ch==='"'){ inQ=false; continue; }
-      val+=ch;
-    }else{
-      if(ch==='"'){ inQ=true; continue; }
-      if(ch===','){ cur.push(val); val=''; continue; }
-      if(ch==='\n'){ cur.push(val); rows.push(cur); cur=[]; val=''; continue; }
-      if(ch==='\r'){ continue; }
-      val+=ch;
-    }
-  }
-  cur.push(val); rows.push(cur);
-  return rows;
-}
-function table(containerId, headers, rows){
-  const el=document.getElementById(containerId);
-  if(!rows.length){ el.innerHTML='<div class="muted">No rows.</div>'; return; }
-  let html = '<div style="overflow:auto; max-height:460px; border:1px solid var(--line); border-radius:12px;"><table><thead><tr>';
-  html += headers.map(h=>`<th>${h}</th>`).join('');
-  html += '</tr></thead><tbody>';
-  html += rows.map(r=>'<tr>'+r.map(c=>`<td>${c==null?'':c}</td>`).join('')+'</tr>').join('');
-  html += '</tbody></table></div>';
-  el.innerHTML=html;
-}
-function toCSV(headers, rows){
-  const esc=v=>{ const s=v==null?'':String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
-  return [headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\n');
-}
-function downloadCSV(filename, headers, rows){
-  const blob=new Blob([toCSV(headers,rows)],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
-}
-function setStatus(t){ document.getElementById('status').textContent=t; }
-function setProgress(pct){
-  const bar=document.getElementById('progressBar');
-  const txt=document.getElementById('progressText');
-  bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-  txt.textContent = Math.round(Math.max(0, Math.min(100, pct))) + '%';
-}
-
-/* ===== SHEET LOADING ===== */
-function extractDocIdFromPubhtml(url){
-  const m=url.match(/\/spreadsheets\/d\/e\/([^/]+)\/pubhtml/i);
-  if(!m) throw new Error('Invalid pubhtml URL');
-  return m[1];
-}
-async function fetchGids(pubhtmlUrl){
-  const res = await fetch(pubhtmlUrl, {mode:'cors'});
-  const html = await res.text();
-  const map={}; let m; const re=/#gid=(\d+)".*?>([^<]+)<\/a>/g;
-  while((m=re.exec(html))!==null){ map[m[2].trim()]=m[1]; }
-  if(!Object.keys(map).length) throw new Error('No tabs found in pubhtml.');
-  return map;
-}
-async function fetchCSVByGid(docId, gid){
-  const url=`https://docs.google.com/spreadsheets/d/e/${docId}/pub?gid=${encodeURIComponent(gid)}&single=true&output=csv`;
-  const res=await fetch(url, {mode:'cors'});
-  if(!res.ok) throw new Error('CSV fetch failed: '+res.status);
-  return parseCSV(await res.text());
-}
-
-/* ===== APP STATE ===== */
-const state = {
-  docId:null, gids:{},
-  contractorsCSV:null, propertyCSV:null,
-  contractorNames:[], cities:[],
-  contractorInfo:new Map(), // name -> {homeAddress?:string}
-  routeSelections:new Map(), // name -> capacity
-  dmCalls:0,
-  // optimization
-  tasks:[], // [{id, lat, lng, name, row, details, slack, listing, today, tomorrow, assignedTo?, distanceMeters?, durationSeconds?}]
-  assignments:new Map(), // name -> Set(taskId), includes 'Unassigned'
-  capacities:new Map(), // name -> capacity
-  contractorMeta:new Map(), // name -> {homeAddress}
-};
-
-/* ===== BOOTSTRAP ===== */
-async function bootstrap(){
-  try{
-    setStatus('Discovering tabs…');
-    const pubhtml=document.getElementById('pubhtmlUrl').value.trim();
-    const docId=extractDocIdFromPubhtml(pubhtml);
-    state.docId=docId;
-    const gids=await fetchGids(pubhtml);
-    state.gids=gids;
-
-    const getGid=(n)=>{
-      const keys=Object.keys(gids);
-      const exact=keys.find(k=>k===n) ?? keys.find(k=>k.toLowerCase()===n.toLowerCase());
-      if(!exact) throw new Error(`Missing required tab "${n}"`);
-      return gids[exact];
-    };
-
-    setStatus('Loading sheets…');
-    const [contractorsCSV, propCSV] = await Promise.all([
-      fetchCSVByGid(docId, getGid(SHEET_NAMES.CONTRACTORS)),
-      fetchCSVByGid(docId, getGid(SHEET_NAMES.PROPERTY)),
-    ]);
-    state.contractorsCSV=contractorsCSV; state.propertyCSV=propCSV;
-
-    // Contractor names from Contractors!D
-    const colD = 3; // zero-based
-    const names = contractorsCSV.slice(1).map(r=>r[colD]).filter(Boolean);
-    const headerGuess = String((contractorsCSV[0]||[])[colD]||'').toLowerCase();
-    const filtered = names.filter(n=> cleanName(n) && cleanName(n)!==cleanName(headerGuess) );
-    state.contractorNames = [...new Set(filtered)].sort((a,b)=>String(a).localeCompare(String(b)));
-
-    // Optional: home_address/address column
-    const cHeader = contractorsCSV[0] || [];
-    const cMap = getColumnMap(cHeader);
-    const cHome = (cMap['home_address']!==undefined) ? cMap['home_address'] :
-                  (cMap['address']!==undefined ? cMap['address'] : null);
-    if(cHome!=null){
-      for(const r of contractorsCSV.slice(1)){
-        const name = r[colD];
-        if(!name) continue;
-        const addr = r[cHome];
-        if(addr) state.contractorInfo.set(String(name), {homeAddress:String(addr)});
-      }
-    }
-
-    // Cities from Property
-    const pHeader=propCSV[0]; const pMap=getColumnMap(pHeader);
-    const cCity=pMap['city']; if(cCity===undefined) throw new Error('Property tab missing "city" column');
-    const cities=[...new Set(propCSV.slice(1).map(r=>r[cCity]).filter(Boolean).map(s=>String(s).trim().toLowerCase()))]
-      .sort((a,b)=>a.localeCompare(b));
-    state.cities=cities;
-
-    // Fill selects
-    fillSelect(document.getElementById('contractorSelect'), state.contractorNames, 'Select contractor…');
-    fillSelect(document.getElementById('citySelect'), state.cities, 'Select city…');
-
-    setStatus('Ready.');
-  }catch(e){
-    console.error(e); setStatus('Error: '+e.message);
-  }
-}
-function fillSelect(el, values, placeholder){
-  el.innerHTML='';
-  const opt0=document.createElement('option'); opt0.value=''; opt0.textContent=placeholder; el.appendChild(opt0);
-  values.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o); });
-}
-
-/* ===== DISTANCE ===== */
-const distCache=new Map();
-async function getDistanceAndDuration(origin, lat, lng){
-  const key=origin+'|'+lat+','+lng;
-  if(distCache.has(key)) return distCache.get(key);
-  if(!origin){ return null; }
-  const url=`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(lat+','+lng)}&key=${encodeURIComponent(DIST_API_KEY)}`;
-  const res=await fetch(url);
-  const data=await res.json();
-  const el=data?.rows?.[0]?.elements?.[0];
-  if(data.status==='OK' && el?.status==='OK'){
-    const out={distanceMeters:el.distance.value, durationSeconds:el.duration.value};
-    distCache.set(key,out); state.dmCalls += 1; await sleep(50); return out;
-  }
-  return null;
-}
-function metersToMiles(m){ return (m/1609.344); }
-function makeRouteLink(start, stops){
-  if(!stops.length || !start) return '';
-  const origin=encodeURIComponent(start);
-  const dest=encodeURIComponent(`${stops[stops.length-1].lat},${stops[stops.length-1].lng}`);
-  const waypts=stops.length>1?`&waypoints=${stops.slice(0,-1).map(t=>`${t.lat},${t.lng}`).join('|')}`:'';
-  return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}${waypts}`;
-}
-
-/* ===== CAPACITY + BOARD HELPERS ===== */
-function capacityInfo(name){
-  const cap=state.capacities.get(name)||0;
-  const used=(state.assignments.get(name)?.size)||0;
-  const pct = cap>0 ? Math.min(100, Math.round((used/cap)*100)) : 0;
-  return {cap, used, pct};
-}
-function updateCapacity(name, newCap){
-  state.capacities.set(name, newCap);
-  // If over capacity, spill furthest tasks to Unassigned
-  const set = state.assignments.get(name) || new Set();
-  if(set.size > newCap){
-    const tasks = [...set].map(id => state.tasks.find(t=>t.id===id)).filter(Boolean);
-    tasks.sort((a,b)=> (b.distanceMeters||0) - (a.distanceMeters||0));
-    const overflow = tasks.slice(newCap);
-    const un = state.assignments.get('Unassigned') || new Set(); state.assignments.set('Unassigned', un);
-    overflow.forEach(t=>{
-      set.delete(t.id);
-      t.assignedTo = undefined;
-      un.add(t.id);
-    });
-  }
-  renderBoard();
-  renderTables(); renderChart();
-  document.getElementById('kpiAssigned').textContent=String(state.tasks.filter(x=>x.assignedTo).length);
-}
-
-/* ===== UI PIECES ===== */
-function chipHTML(name, cap){
-  const {used} = capacityInfo(name);
-  const maxSlider = Math.max(cap, used, 20);
-  return `
-    <div class="chip" data-chip="${name}">
-      <div>
-        <div style="font-weight:700">${name}</div>
-        <div class="capline">
-          <span class="muted">Capacity</span>
-          <input type="range" min="0" max="${maxSlider}" step="1" value="${cap}" data-slider="${name}" />
-          <output data-out="${name}">${cap}</output>
+    <!-- Table -->
+    <section class="card p-3 rounded-xl">
+      <div class="flex items-center justify-between mb-2"><h2 class="font-semibold">Transactions (first 200)</h2><div class="text-xs text-slate-600">Click headers to sort</div></div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr>
+              <th data-sort="date" class="px-3 py-2 text-left cursor-pointer">Date</th>
+              <th data-sort="desc" class="px-3 py-2 text-left cursor-pointer">Description</th>
+              <th data-sort="category" class="px-3 py-2 text-left cursor-pointer">Category</th>
+              <th data-sort="type" class="px-3 py-2 text-left cursor-pointer">Type</th>
+              <th data-sort="amount" class="px-3 py-2 text-right cursor-pointer">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="flex items-center justify-between p-2 text-xs text-slate-600">
+        <div>Showing <span id="rowCount">0</span> rows</div>
+        <div class="flex gap-2 items-center">
+          <button id="prevPage" class="btn">Prev</button>
+          <span id="pageInfo"></span>
+          <button id="nextPage" class="btn">Next</button>
         </div>
-        <div class="muted" style="font-size:12px; margin-top:6px;">Used: ${(state.assignments.get(name)?.size)||0}/${cap} (${cap>0?Math.round((((state.assignments.get(name)?.size)||0)/cap)*100):0}%)</div>
       </div>
-      <div class="right">
-        <button class="btn" data-remove="${name}" title="Remove">✕</button>
-      </div>
-    </div>
-  `;
-}
-function renderRouteChips(){
-  const wrap=document.getElementById('selectedWrap'); wrap.innerHTML='';
-  for(const [name, cap] of state.routeSelections.entries()){
-    const div=document.createElement('div'); div.innerHTML=chipHTML(name, cap);
-    wrap.appendChild(div.firstElementChild);
-  }
-  // wire sliders & remove
-  wrap.querySelectorAll('input[type="range"][data-slider]').forEach(sl=>{
-    sl.addEventListener('input', (e)=>{
-      const name=e.target.getAttribute('data-slider');
-      const out=wrap.querySelector(`output[data-out="${CSS.escape(name)}"]`);
-      out.textContent = e.target.value;
-    });
-    sl.addEventListener('change', (e)=>{
-      const name=e.target.getAttribute('data-slider');
-      const val=parseInt(e.target.value,10);
-      state.routeSelections.set(name, val);
-      updateCapacity(name, val);
-    });
-  });
-  wrap.querySelectorAll('button[data-remove]').forEach(btn=>{
-    btn.onclick=()=>{
-      const name=btn.getAttribute('data-remove');
-      const set = state.assignments.get(name) || new Set();
-      const un = state.assignments.get('Unassigned') || new Set(); state.assignments.set('Unassigned', un);
-      [...set].forEach(id=>{
-        set.delete(id);
-        const t=state.tasks.find(x=>x.id===id); if(t){ t.assignedTo=undefined; un.add(id); }
-      });
-      state.assignments.delete(name);
-      state.capacities.delete(name);
-      state.routeSelections.delete(name);
-      renderRouteChips(); renderBoard(); renderTables(); renderChart();
-      document.getElementById('kpiAssigned').textContent=String(state.tasks.filter(x=>x.assignedTo).length);
-    };
-  });
-}
-function laneHTML(name, showMeter=true){
-  const {cap, used, pct}=capacityInfo(name);
-  const meter = showMeter ? `
-    <div class="lane-hd">
-      <div><b>${name}</b></div>
-      <div class="cap">${used}/${cap}</div>
-    </div>
-    <div class="meter" aria-label="Capacity meter"><div class="fill" style="width:${pct}%"></div></div>
-  ` : `
-    <div class="lane-hd"><div><b>${name}</b></div><div class="cap">${used}</div></div>
-  `;
-  return `
-    <div class="lane" data-contractor="${name}">
-      ${meter}
-      <div class="lane-body" style="margin-top:10px;"></div>
-    </div>
-  `;
-}
-function taskCardHTML(t){
-  return `
-    <div class="task" draggable="true" data-task="${t.id}">
-      <div><b>${t.name || '(Unnamed property)'}</b></div>
-      <div class="muted" style="font-size:12px;">Row ${t.row} • ${t.lat.toFixed(5)}, ${t.lng.toFixed(5)}</div>
-      ${t.details ? `<div class="muted" style="font-size:12px; margin-top:4px;">${t.details}</div>` : ``}
-      ${Number.isFinite(t.distanceMeters) ? `<div class="muted" style="font-size:12px; margin-top:4px;">~${metersToMiles(t.distanceMeters).toFixed(2)} mi • ${Math.ceil((t.durationSeconds||0)/60)} min</div>` : ``}
-    </div>
-  `;
-}
-function renderBoard(){
-  const board=document.getElementById('board');
-  board.innerHTML='';
-  // Unassigned lane first
-  const unDiv=document.createElement('div');
-  unDiv.innerHTML=laneHTML('Unassigned', /*showMeter=*/false);
-  const unLane=unDiv.firstElementChild;
-  board.appendChild(unLane);
+    </section>
 
-  // Contractor lanes
-  for(const [name] of state.routeSelections.entries()){
-    const wrap=document.createElement('div');
-    wrap.innerHTML=laneHTML(name);
-    board.appendChild(wrap.firstElementChild);
-  }
+  </main>
 
-  // Populate cards
-  const placeInLane = (laneName, t) => {
-    const lane = [...board.querySelectorAll('.lane')].find(l=>l.getAttribute('data-contractor')===laneName);
-    lane.querySelector('.lane-body').insertAdjacentHTML('beforeend', taskCardHTML(t));
-  };
-  if(!state.assignments.has('Unassigned')) state.assignments.set('Unassigned', new Set());
-  for(const [n] of state.routeSelections.entries()){
-    if(!state.assignments.has(n)) state.assignments.set(n,new Set());
-  }
-  for(const t of state.tasks){
-    const laneName = t.assignedTo ?? 'Unassigned';
-    placeInLane(laneName, t);
-  }
+  <script>
+    // ===== State =====
+    const LS_KEYS={ links:'io_links', settings:'io_settings', cache:'io_cache_v1' };
+    let RAW_HEADERS = new Set();
+    let RAW_ROWS = [];
+    let SETTINGS = { currency:'USD', locale: navigator.language||'en-US', starting:0, low:100 };
+    let SORT = { key:'date', dir:'desc' };
+    let PAGE = { index:1, size:50 };
 
-  // DnD handlers
-  board.querySelectorAll('.lane').forEach(lane=>{
-    lane.addEventListener('dragover', (e)=>{ e.preventDefault(); lane.classList.add('drop-target'); });
-    lane.addEventListener('dragleave', ()=> lane.classList.remove('drop-target'));
-    lane.addEventListener('drop', async (e)=>{
-      e.preventDefault(); lane.classList.remove('drop-target');
-      const tid=e.dataTransfer.getData('text/plain');
-      const toName=lane.getAttribute('data-contractor');
-      await moveTask(tid, toName);
-    });
-  });
-  board.querySelectorAll('.task').forEach(el=>{
-    el.addEventListener('dragstart', (e)=>{ el.classList.add('dragging'); e.dataTransfer.setData('text/plain', el.getAttribute('data-task')); });
-    el.addEventListener('dragend', ()=> el.classList.remove('dragging'));
-  });
-}
+    // ===== Els =====
+    const csvUrl=document.getElementById('csvUrl');
+    const addLinkBtn=document.getElementById('addLinkBtn');
+    const loadBtn=document.getElementById('loadBtn');
+    const refreshBtn=document.getElementById('refreshBtn');
+    const loadSampleBtn=document.getElementById('loadSampleBtn');
+    const resetBtn=document.getElementById('resetBtn');
+    const linksUl=document.getElementById('linksUl');
+    const linkList=document.getElementById('linkList');
 
-/* ===== MOVE / REASSIGN ===== */
-async function moveTask(taskId, toName){
-  const t=state.tasks.find(x=>x.id===taskId); if(!t) return;
-  const fromName = t.assignedTo ?? 'Unassigned';
+    const currencySel=document.getElementById('currency');
+    const localeSel=document.getElementById('locale');
+    const startingBalanceEl=document.getElementById('startingBalance');
+    const lowThresholdEl=document.getElementById('lowThreshold');
+    const saveSettingsBtn=document.getElementById('saveSettingsBtn');
 
-  if(toName !== 'Unassigned'){
-    const cap = state.capacities.get(toName)||0;
-    const used = (state.assignments.get(toName)?.size)||0;
-    if(used >= cap){ alert(`Capacity reached for ${toName}`); return; }
-  }
+    const kpiIncome=document.getElementById('kpiIncome');
+    const kpiExpense=document.getElementById('kpiExpense');
+    const kpiNet=document.getElementById('kpiNet');
+    const kpiBalance=document.getElementById('kpiBalance');
+    const balanceBadge=document.getElementById('balanceBadge');
 
-  const fromSet = state.assignments.get(fromName) || new Set(); fromSet.delete(taskId);
+    const alertsBody=document.getElementById('alertsBody');
+    const recsList=document.getElementById('recsList');
 
-  if(toName === 'Unassigned'){
-    t.assignedTo = undefined;
-    const un = state.assignments.get('Unassigned') || new Set(); un.add(taskId); state.assignments.set('Unassigned', un);
-  } else {
-    const meta=state.contractorMeta.get(toName)||{};
-    const dm=await getDistanceAndDuration(meta.homeAddress||'', t.lat, t.lng);
-    if(dm){ t.distanceMeters=dm.distanceMeters; t.durationSeconds=dm.durationSeconds; }
-    t.assignedTo = toName;
-    const set = state.assignments.get(toName) || new Set(); set.add(taskId); state.assignments.set(toName, set);
-  }
+    const tbody=document.getElementById('tbody');
+    const rowCount=document.getElementById('rowCount');
+    const pageInfo=document.getElementById('pageInfo');
+    const prevPage=document.getElementById('prevPage');
+    const nextPage=document.getElementById('nextPage');
 
-  renderBoard(); renderTables(); renderChart();
-  document.getElementById('kpiAssigned').textContent=String(state.tasks.filter(x=>x.assignedTo).length);
-}
+    // ===== Utils =====
+    function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),1800); }
+    const normalizeHeader = s => String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+    const monthKey=d=> d.getFullYear()+ '-' + String(d.getMonth()+1).padStart(2,'0');
+    function fmtCurrency(n){ try{ return new Intl.NumberFormat(SETTINGS.locale,{style:'currency',currency:SETTINGS.currency}).format(n);}catch{ return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);} }
 
-/* ===== OPTIMIZATION ===== */
-function nextId(){ return 't_'+Math.random().toString(36).slice(2,9); }
-
-async function runOptimization(){
-  try{
-    setStatus('Optimizing…'); setProgress(0); state.dmCalls=0;
-    state.tasks=[]; state.assignments.clear(); state.capacities.clear(); state.contractorMeta.clear();
-
-    const citySel=document.getElementById('citySelect').value.trim().toLowerCase();
-    const daySel=document.getElementById('daySelect').value;
-    if(!citySel){ alert('Pick a city'); setStatus('Awaiting input'); return; }
-    if(state.routeSelections.size===0){ alert('Add at least one contractor + capacity'); setStatus('Awaiting input'); return; }
-    const hour = chicagoHourNow();
-
-    // Capacities/meta from chips
-    for(const [name, cap] of state.routeSelections.entries()){
-      state.capacities.set(name, Number(cap)||0);
-      const meta = state.contractorInfo.get(name) || {};
-      state.contractorMeta.set(name, {homeAddress: meta.homeAddress || ''});
-      state.assignments.set(name, new Set());
-    }
-    state.assignments.set('Unassigned', new Set());
-
-    // Collect tasks from Property
-    const pHeader=state.propertyCSV[0]; const pMap=getColumnMap(pHeader);
-    const cLat=pMap['latitude'], cLng=pMap['longitude'], cCity=pMap['city'], cRepair=pMap['repair details'], cSlack=pMap['slack channel link'], cList=pMap['listing id'];
-    const idxToday=14, idxTomorrow=15;
-    const valid=[], unassign=[];
-    for(let i=1;i<state.propertyCSV.length;i++){
-      const row=state.propertyCSV[i];
-      const lat=parseFloat(row[cLat]); const lng=parseFloat(row[cLng]);
-      const rowCity=(row[cCity]||'').toString().trim().toLowerCase();
-      const status=(row[(daySel==='today')?idxToday:idxTomorrow]||'').toString().trim();
-
-      if(rowCity!==citySel || isNaN(lat)||isNaN(lng)||!status){ unassign.push(row); continue; }
-      let ok=false;
-      if(status==='Completely Vacant') ok=true;
-      else if(status==='Vacant AFTER Check Out' && hour>=11) ok=true;
-      else if(status==='Vacant BEFORE Check In' && hour<=13) ok=true;
-      else if(status==='Turnover' && hour>=11 && hour<=15) ok=true;
-
-      const task={ id:nextId(), row:i+1, lat, lng,
-        name:row[5], details:row[cRepair], slack:row[cSlack], listing:row[cList],
-        today:row[idxToday], tomorrow:row[idxTomorrow]
-      };
-      if(ok) valid.push(task); else unassign.push(row);
+    function parseAmount(val){
+      if(val==null) return NaN; let s=String(val).trim(); if(!s) return NaN; const neg=/^\(.*\)$/.test(s); s=s.replace(/[()]/g,''); s=s.replace(/[^0-9.,-]/g,'');
+      if(s.includes(',') && s.includes('.')){ if(s.lastIndexOf('.')>s.lastIndexOf(',')) s=s.replace(/,/g,''); else s=s.replace(/\./g,'').replace(',', '.'); }
+      else if(s.includes(',')){ const parts=s.split(','); if(parts[parts.length-1].length<=2) s=s.replace(/,/g,(m,i)=> i===s.lastIndexOf(',')?'.':''); else s=s.replace(/,/g,''); }
+      else if(s.includes('.')){ const parts=s.split('.'); if(parts.length>2 && parts[parts.length-1].length===3) s=s.replace(/\./g,''); }
+      const n=parseFloat(s); if(isNaN(n)) return NaN; return neg? -n : n;
     }
 
-    // Assign greedily to nearest with capacity & progress %
-    const totalSteps = Math.max(1, valid.length);
-    let done=0;
-    for(const t of valid){
-      let pick=null; let bestDist=Number.POSITIVE_INFINITY; let bestDur=0;
-      for(const [name, set] of state.assignments.entries()){
-        if(name==='Unassigned') continue;
-        const cap=state.capacities.get(name)||0;
-        if(set.size >= cap) continue;
-        const meta=state.contractorMeta.get(name)||{};
-        const dm=await getDistanceAndDuration(meta.homeAddress||'', t.lat, t.lng);
-        const d=dm?.distanceMeters ?? Number.POSITIVE_INFINITY;
-        if(d<bestDist){ pick=name; bestDist=d; bestDur=dm?.durationSeconds||0; }
-      }
-      if(pick){
-        const set = state.assignments.get(pick); set.add(t.id);
-        t.assignedTo=pick; t.distanceMeters=bestDist; t.durationSeconds=bestDur;
-      } else {
-        state.assignments.get('Unassigned').add(t.id);
-      }
-      state.tasks.push(t);
-      done++; setProgress((done/totalSteps)*100);
+    function parseDate(val){ if(!val) return null; const d1=new Date(val); if(!isNaN(d1)) return d1; const m=String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); if(m){ const [,d,mo,y]=m; const yr=y.length===2?2000+parseInt(y):parseInt(y); const dt=new Date(yr,parseInt(mo)-1,parseInt(d)); if(!isNaN(dt)) return dt; } return null; }
+
+    function inferType(typeVal, amountVal){ if(typeVal!=null && String(typeVal).trim()!==''){ const v=normalizeHeader(typeVal); if(/income|ingreso|credit|cr|in\b/.test(v)) return 'income'; if(/expense|outcome|egreso|debit|dr|out\b/.test(v)) return 'expense'; } if(typeof amountVal==='number'&&!isNaN(amountVal)) return amountVal<0?'expense':'income'; return 'expense'; }
+
+    function guessHeader(headers, kind){
+      const synonyms={
+        date:['date','fecha','transaction date','posted','day'],
+        desc:['description','details','memo','note','concept','concepto'],
+        cat:['category','categoría','categoria','group','type of expense'],
+        type:['type','income/outcome','income/expense','flow','in/out','io','credit/debit','cr/dr'],
+        amt:['amount','monto','importe','value','total','debit','credit','dr','cr']
+      }[kind];
+      const norm=headers.map(h=>normalizeHeader(h));
+      for(const syn of synonyms){ const idx=norm.findIndex(h=>h===syn||h.includes(syn)); if(idx!==-1) return headers[idx]; }
+      return headers[0];
     }
 
-    // KPIs & pills
-    document.getElementById('kpiTasks').textContent=String(valid.length);
-    document.getElementById('kpiAssigned').textContent=String(state.tasks.filter(x=>x.assignedTo).length);
-    document.getElementById('kpiUn').textContent=String(unassign.length);
-    document.getElementById('kpiHM').textContent=String(state.routeSelections.size);
-    document.getElementById('pillHour').textContent=String(hour).padStart(2,'0')+':00';
-    document.getElementById('pillCity').textContent=citySel || '—';
-    document.getElementById('pillDay').textContent=(daySel==='today'?'Today':'Tomorrow');
-    document.getElementById('pillCalls').textContent=String(state.dmCalls);
-
-    renderBoard(); renderRouteChips(); renderTables(unassign); renderChart();
-
-    // Downloads enable
-    document.getElementById('dlOptimized').disabled=false;
-    document.getElementById('dlSummary').disabled=false;
-    document.getElementById('dlUnassignable').disabled=false;
-
-    setStatus('Done.');
-  }catch(e){
-    console.error(e); setStatus('Error: '+e.message);
-  }
-}
-
-/* ===== TABLES & CHART ===== */
-function renderTables(unassignExplicit){
-  // Optimized Assignments
-  const optHeaders=['Contractor','Task Row','Property','Latitude','Longitude','Repair Details','Slack Channel Link','Listing ID','Today','Tomorrow'];
-  const optRows=[];
-  for(const t of state.tasks){
-    if(!t.assignedTo) continue;
-    optRows.push([t.assignedTo, t.row, t.name, t.lat, t.lng, t.details, t.slack, t.listing, t.today, t.tomorrow]);
-  }
-  table('optTable', optHeaders, optRows);
-
-  // Distance Summary
-  const sumHeaders=['Contractor','Total Distance (miles)','Total Duration (minutes)','Route Link'];
-  const sumRows=[];
-  for(const [name, set] of state.assignments.entries()){
-    if(name==='Unassigned') continue;
-    const ids=[...set]; const stops=ids.map(id=>state.tasks.find(t=>t.id===id && t.assignedTo===name)).filter(Boolean);
-    const dSum=stops.reduce((a,t)=>a+(t.distanceMeters||0),0);
-    const mSum=metersToMiles(dSum);
-    const tSum=stops.reduce((a,t)=>a+(t.durationSeconds||0),0);
-    const route=makeRouteLink((state.contractorMeta.get(name)||{}).homeAddress, stops);
-    sumRows.push([name, mSum.toFixed(2), Math.ceil(tSum/60), route? `<a href="${route}" target="_blank">Open Route</a>`:'']);
-  }
-  table('sumTable', sumHeaders, sumRows);
-
-  // Unassignable (from sheet rules)
-  if(unassignExplicit){
-    table('unTable', state.propertyCSV[0]||[], unassignExplicit);
-  }
-
-  // Downloads
-  document.getElementById('dlOptimized').onclick=()=>downloadCSV('optimized_assignments.csv', optHeaders, optRows);
-  const sumRowsPlain=sumRows.map(r=>[r[0], r[1], r[2], 'Open Route']);
-  document.getElementById('dlSummary').onclick=()=>downloadCSV('distance_summary.csv', sumHeaders, sumRowsPlain);
-  document.getElementById('dlUnassignable').onclick=()=>downloadCSV('unassignable_units.csv', state.propertyCSV[0]||[], unassignExplicit||[]);
-}
-function renderChart(){
-  const wrap=document.getElementById('distChart');
-  wrap.innerHTML='';
-  const data=[];
-  for(const [name, set] of state.assignments.entries()){
-    if(name==='Unassigned') continue;
-    const ids=[...set]; const miles = ids.reduce((a,id)=>{
-      const t=state.tasks.find(x=>x.id===id);
-      return a + (t?.distanceMeters ? metersToMiles(t.distanceMeters) : 0);
-    },0);
-    data.push({name, miles});
-  }
-  if(!data.length){ wrap.innerHTML='<div class="muted">No data</div>'; return; }
-  const max=Math.max(...data.map(d=>d.miles),1);
-  const barW=28, gap=18;
-  data.forEach((d,i)=>{
-    const h=Math.max(2, Math.round((d.miles/max)*((wrap.clientHeight||172)-22)));
-    const x=i*(barW+gap)+12;
-    const b=document.createElement('div');
-    b.className='bar'; b.style.left=x+'px'; b.style.height=h+'px'; b.style.width=barW+'px';
-    b.innerHTML=`<label>${d.miles.toFixed(1)}</label>`;
-    b.title=`${d.name}: ${d.miles.toFixed(2)} mi`;
-    wrap.appendChild(b);
-  });
-}
-
-/* ===== AUTO-FILL REMAINING ===== */
-async function autoFillRemaining(){
-  try{
-    setStatus('Auto-filling…'); setProgress(0);
-    const un = state.assignments.get('Unassigned') || new Set();
-    if (un.size === 0) { setStatus('Nothing to auto-fill.'); return; }
-
-    // Build contractors with remaining capacity
-    const roster = [];
-    for (const [name, cap] of state.capacities.entries()){
-      const used = (state.assignments.get(name)?.size) || 0;
-      const remaining = Math.max(0, cap - used);
-      if (remaining > 0){
-        roster.push({
-          name,
-          remaining,
-          homeAddress: (state.contractorMeta.get(name)||{}).homeAddress || ''
-        });
-      }
-    }
-    if (roster.length === 0){ setStatus('All contractors at capacity.'); return; }
-
-    const toPlace = [...un];
-    const total = toPlace.length;
-    let placed = 0;
-
-    for (let i=0; i<toPlace.length; i++){
-      if (roster.every(r => r.remaining === 0)) break;
-
-      const id = toPlace[i];
-      const t = state.tasks.find(x => x.id === id);
-      if (!t) continue;
-
-      let best = null, bestDist = Number.POSITIVE_INFINITY, bestDur = 0;
-      for (const r of roster){
-        if (r.remaining <= 0) continue;
-        const dm = await getDistanceAndDuration(r.homeAddress, t.lat, t.lng);
-        const d  = dm?.distanceMeters ?? Number.POSITIVE_INFINITY;
-        if (d < bestDist){
-          best = r; bestDist = d; bestDur = dm?.durationSeconds || 0;
+    // ===== URL & CSV helpers =====
+    function normalizeGsUrl(u){
+      try{
+        const url=new URL(u);
+        if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){
+          const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); const id=m?m[1]:null; if(!id) return u;
+          let gid=null; const hash=(url.hash||'').replace('#',''); const hashParams=new URLSearchParams(hash); if(hashParams.has('gid')) gid=hashParams.get('gid'); if(url.searchParams.has('gid')) gid=url.searchParams.get('gid');
+          const out=new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`); if(gid) out.searchParams.set('gid', gid); return out.toString();
         }
-      }
-
-      if (best && isFinite(bestDist)){
-        un.delete(id);
-        const set = state.assignments.get(best.name) || new Set();
-        set.add(id); state.assignments.set(best.name, set);
-        t.assignedTo = best.name; t.distanceMeters = bestDist; t.durationSeconds = bestDur;
-        best.remaining--;
-        placed++;
-      }
-
-      setProgress(((i+1)/total)*100);
+        return u;
+      }catch{ return u; }
     }
 
-    // Refresh UI
-    renderBoard(); renderTables(); renderChart();
-    document.getElementById('kpiAssigned').textContent = String(state.tasks.filter(x=>x.assignedTo).length);
-    document.getElementById('pillCalls').textContent = String(state.dmCalls);
-    setStatus(placed ? `Auto-filled ${placed} task${placed===1?'':'s'}.` : 'No tasks were auto-filled.');
-  } catch (e){
-    console.error(e);
-    setStatus('Error: '+e.message);
-  }
-}
+    function buildCsvCandidates(u){
+      try{
+        const url=new URL(u);
+        if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){
+          const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); const id=m?m[1]:null; let gid=null; const hash=(url.hash||'').replace('#',''); const hp=new URLSearchParams(hash); if(hp.has('gid')) gid=hp.get('gid'); if(url.searchParams.has('gid')) gid=url.searchParams.get('gid');
+          const c=[]; const exp=new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`); if(gid) exp.searchParams.set('gid', gid); c.push(exp.toString()); const pub=new URL(`https://docs.google.com/spreadsheets/d/${id}/pub?output=csv`); if(gid) pub.searchParams.set('gid', gid); c.push(pub.toString()); const gviz=new URL(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`); if(gid) gviz.searchParams.set('gid', gid); c.push(gviz.toString()); return c;
+        }
+      }catch{}
+      return [u];
+    }
 
-/* ===== WIRING ===== */
-document.getElementById('addBtn').onclick=()=>{
-  const name=document.getElementById('contractorSelect').value;
-  const qty=parseInt(document.getElementById('qtyInput').value,10);
-  if(!name){ alert('Select a contractor'); return; }
-  if(!Number.isFinite(qty) || qty<0){ alert('Enter a capacity (0 or more)'); return; }
-  state.routeSelections.set(name, qty);
-  renderRouteChips();
-  document.getElementById('contractorSelect').value='';
-  document.getElementById('qtyInput').value='';
-};
-document.getElementById('resetBtn').onclick=()=>{
-  state.routeSelections.clear(); renderRouteChips();
-  document.getElementById('citySelect').value='';
-  document.getElementById('daySelect').value='today';
-  ['optTable','sumTable','unTable','distChart','board'].forEach(id=> document.getElementById(id).innerHTML='');
-  ['kpiTasks','kpiAssigned','kpiUn','kpiHM'].forEach(id=> document.getElementById(id).textContent='—');
-  ['pillHour','pillCity','pillDay','pillCalls'].forEach(id=> document.getElementById(id).textContent='—');
-  setProgress(0); setStatus('Ready.');
-};
-document.getElementById('runBtn').onclick=()=>runOptimization();
-document.getElementById('autofillBtn').onclick=()=>autoFillRemaining();
-document.getElementById('pubhtmlUrl').addEventListener('change', ()=>bootstrap());
-window.addEventListener('load', ()=>bootstrap());
-</script>
+    function cacheGet(key){ try{ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); return all[key]; }catch{return undefined;} }
+    function cacheSet(key,val){ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); all[key]=val; localStorage.setItem(LS_KEYS.cache, JSON.stringify(all)); }
+    function isProbablyHtml(text,ct){ if(ct && /text\/html/i.test(ct)) return true; const h=text.slice(0,200).toLowerCase(); return h.includes('<!doctype html')||h.includes('<html'); }
+
+    async function fetchCsvSmart(url){
+      const candidates=buildCsvCandidates(url);
+      let lastErr=null; for(const cand of candidates){ try{
+        const cacheKey='csv:'+cand; const cached=cacheGet(cacheKey); if(cached){ return Papa.parse(cached,{header:true,skipEmptyLines:true}).data; }
+        const res=await fetch(cand,{cache:'no-store'}); if(!res.ok) throw new Error('HTTP '+res.status); const text=await res.text(); const ct=res.headers.get('content-type')||''; if(isProbablyHtml(text,ct)) throw new Error('HTML returned (sign-in/permissions)'); if(!/[,\n]/.test(text)) throw new Error('No CSV structure'); cacheSet(cacheKey,text); return Papa.parse(text,{header:true,skipEmptyLines:true}).data;
+      }catch(e){ lastErr=e; console.warn('CSV candidate failed', cand, e.message); }}
+      throw new Error('All CSV endpoints failed. Last error: '+(lastErr?lastErr.message:'unknown'));
+    }
+
+    // ===== Links =====
+    function getLinks(){try{return JSON.parse(localStorage.getItem(LS_KEYS.links)||'[]')}catch{return[]}}
+    function setLinks(list){ localStorage.setItem(LS_KEYS.links, JSON.stringify(Array.from(new Set(list)))); renderLinks(); }
+    function addLink(input){ const raw=String(input||'').trim(); if(!raw){ toast('Paste a link first'); return; } const parts=raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean); const list=getLinks(); for(const p of parts){ const n=normalizeGsUrl(p); if(!list.includes(n)) list.push(n); } setLinks(list); }
+    function removeLink(u){ const list=getLinks().filter(x=>x!==u); setLinks(list); }
+
+    function renderLinks(){ const list=getLinks(); linkList.classList.toggle('hidden', list.length===0); linksUl.innerHTML=list.map(u=>{ const norm=normalizeGsUrl(u); return `<li class="p-2 border border-slate-200 rounded bg-white flex items-center justify-between gap-2"><div class="min-w-0"><div class="truncate text-slate-700">${u}</div><div class="truncate text-xs text-slate-500">Fetch: <code>${norm}</code></div></div><div class="flex gap-2"><a class="btn text-xs" target="_blank" href="${norm}">Test</a><button class="btn text-xs" data-remove="${u}">Remove</button></div></li>`; }).join(''); linksUl.querySelectorAll('button[data-remove]').forEach(b=> b.addEventListener('click', e=> removeLink(e.currentTarget.dataset.remove))); }
+
+    // ===== Transform =====
+    function transformRows(raw){ if(!raw||!raw.length) return []; const headers=Object.keys(raw[0]||{}); const kDate=guessHeader(headers,'date'); const kDesc=guessHeader(headers,'desc'); const kCat=guessHeader(headers,'cat'); const kType=guessHeader(headers,'type'); const kAmt=guessHeader(headers,'amt'); const rows=[]; for(const r of raw){ const d=parseDate(r[kDate]); const a=parseAmount(r[kAmt]); if(!d || isNaN(a)) continue; const t=inferType(r[kType], a); rows.push({ date:d, desc:String(r[kDesc]||''), category:String(r[kCat]||'(Uncategorized)'), type:t, amount:Math.abs(a) }); } return rows; }
+
+    function computeKPIs(rows){ const inc=rows.filter(x=>x.type==='income').reduce((s,x)=>s+x.amount,0); const exp=rows.filter(x=>x.type==='expense').reduce((s,x)=>s+x.amount,0); const bal=SETTINGS.starting + inc - exp; kpiIncome.textContent=fmtCurrency(inc); kpiExpense.textContent=fmtCurrency(exp); kpiNet.textContent=fmtCurrency(inc-exp); kpiBalance.textContent=fmtCurrency(bal); balanceBadge.textContent = bal < SETTINGS.low ? 'LOW' : 'OK'; balanceBadge.style.borderColor = bal < SETTINGS.low ? '#f87171' : '#34d399'; balanceBadge.style.color = bal < SETTINGS.low ? '#b91c1c' : '#065f46'; return {inc,exp,bal}; }
+
+    function renderAlerts(rows, kpis){
+      const low=parseFloat(SETTINGS.low||0);
+      const sorted=rows.slice().sort((a,b)=>a.date-b.date);
+      let bal=parseFloat(SETTINGS.starting||0);
+      const events=[];
+      for(const r of sorted){ bal += (r.type==='income'? r.amount : -r.amount); if(bal<low){ events.push({date:r.date, balance:bal, note:`${r.type==='expense'?'Expense':'Income'}: ${r.desc||'(no description)'}`}); } }
+      alertsBody.innerHTML = events.length ? events.map(e=>`<tr><td class="px-2 py-1">${e.date.toISOString().slice(0,10)}</td><td class="px-2 py-1 text-right">${fmtCurrency(e.balance)}</td><td class="px-2 py-1">${e.note}</td></tr>`).join('') : `<tr><td colspan="3" class="px-2 py-2 text-slate-600">No low-balance events.</td></tr>`;
+
+      // 30‑day coverage check
+      const today=new Date(); today.setHours(0,0,0,0);
+      const in30=new Date(today); in30.setDate(in30.getDate()+30);
+      const upcomingExp = rows.filter(r=> r.type==='expense' && r.date>today && r.date<=in30).reduce((s,x)=>s+x.amount,0);
+      const upcomingInc = rows.filter(r=> r.type==='income' && r.date>today && r.date<=in30).reduce((s,x)=>s+x.amount,0);
+
+      // If there are no future-dated rows, fallback to simple projection: average daily net from last 60 days
+      let projected = kpis.bal + upcomingInc - upcomingExp;
+      if(upcomingExp===0 && upcomingInc===0){
+        const past60=new Date(today); past60.setDate(past60.getDate()-60);
+        const pastRows=rows.filter(r=> r.date>past60 && r.date<=today);
+        const netPast=pastRows.reduce((s,x)=> s + (x.type==='income'? x.amount : -x.amount), 0);
+        const days=Math.max(1, (today - past60)/(1000*60*60*24));
+        const avgDaily=netPast/days; // could be negative
+        projected = kpis.bal + avgDaily*30;
+      }
+
+      const recs=[];
+      if(projected < 0 || projected < low){
+        const gap = Math.abs(Math.min(projected, projected-low));
+        recs.push(`⚠️ In 30 days you ${projected<0? 'will be negative' : 'may be below your threshold'}: ${fmtCurrency(projected)}.`);
+        recs.push(`You need ~${fmtCurrency(gap)} more income or cuts within 30 days to stay above ${fmtCurrency(low)}.`);
+        // Target high-impact categories (next 30d if available, else last 30d)
+        const baseRows=(upcomingExp>0? rows.filter(r=> r.type==='expense' && r.date>today && r.date<=in30)
+                                     : rows.filter(r=> r.type==='expense' && r.date>new Date(today-1000*60*60*24*30) && r.date<=today));
+        const byCat={}; baseRows.forEach(r=> byCat[r.category]=(byCat[r.category]||0)+r.amount );
+        const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,3);
+        if(topCats.length) recs.push(`Trim these categories: ${topCats.map(([c,v])=>`${c} (${fmtCurrency(v)})`).join(', ')}.`);
+      } else {
+        recs.push(`✅ Based on current data, you can cover the next 30 days. Projected balance: ${fmtCurrency(projected)}.`);
+      }
+
+      // Recurring expense detection (helpful optimization targets)
+      const byDesc={}; rows.filter(r=>r.type==='expense').forEach(r=>{ const k=(r.desc||'').toLowerCase(); byDesc[k]=(byDesc[k]||{count:0,total:0,pretty:r.desc}); byDesc[k].count++; byDesc[k].total+=r.amount; });
+      const recurring = Object.values(byDesc).filter(x=>x.count>=3).sort((a,b)=>b.total-a.total).slice(0,3);
+      if(recurring.length){ recs.push(`Recurring spend to renegotiate: ${recurring.map(x=>`${x.pretty} ×${x.count} (${fmtCurrency(x.total)})`).join(', ')}.`); }
+
+      recsList.innerHTML = recs.map(r=>`<li>${r}</li>`).join('');
+    }
+
+    // ===== Charts =====
+    let barChart, pieChart;
+    function renderCharts(rows){
+      Chart.defaults.color='#0f172a'; Chart.defaults.font.size=13;
+      const buckets={}; for(const r of rows){ const k=monthKey(r.date); if(!buckets[k]) buckets[k]={income:0,expense:0}; buckets[k][r.type]+=r.amount; }
+      const labels=Object.keys(buckets).sort(); const income=labels.map(k=>buckets[k].income); const expense=labels.map(k=>buckets[k].expense);
+      const ctxB=document.getElementById('barChart'); if(barChart) barChart.destroy(); barChart=new Chart(ctxB,{type:'bar',data:{labels,datasets:[{label:'Income',data:income},{label:'Expense',data:expense}]},options:{responsive:true,scales:{x:{ticks:{color:'#0f172a'},grid:{color:'#e2e8f0'}},y:{beginAtZero:true,ticks:{color:'#0f172a'},grid:{color:'#e2e8f0'}}},plugins:{legend:{labels:{color:'#0f172a'}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtCurrency(c.parsed.y)}`}}}}});
+      const byCat={}; rows.filter(r=>r.type==='expense').forEach(r=> byCat[r.category]=(byCat[r.category]||0)+r.amount );
+      const pLabels=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a]); const pData=pLabels.map(l=>byCat[l]);
+      const ctxP=document.getElementById('pieChart'); if(pieChart) pieChart.destroy(); pieChart=new Chart(ctxP,{type:'doughnut',data:{labels:pLabels,datasets:[{data:pData}]} , options:{plugins:{legend:{labels:{color:'#0f172a'}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtCurrency(c.parsed)}`}}}}});
+    }
+
+    // ===== Table =====
+    function applySort(rows){ const dir=SORT.dir==='asc'?1:-1; return rows.sort((a,b)=>{ const k=SORT.key; if(k==='amount') return (a.amount-b.amount)*dir; if(k==='date') return (a.date-b.date)*dir; const av=(a[k]||'').toString().toLowerCase(); const bv=(b[k]||'').toString().toLowerCase(); return av<bv? -1*dir : av>bv? 1*dir : 0; }); }
+    function paginate(rows){ const total=Math.max(1, Math.ceil(rows.length/PAGE.size)); if(PAGE.index>total) PAGE.index=total; const start=(PAGE.index-1)*PAGE.size; return { slice: rows.slice(start, start+PAGE.size), totalPages: total, totalRows: rows.length }; }
+    function renderTable(rows){ const fmt=d=>d.toISOString().slice(0,10); const fmtAmt=(n,t)=>`${t==='expense'?'-':''}${fmtCurrency(n)}`; const sorted=applySort(rows.slice()); const {slice,totalPages,totalRows}=paginate(sorted); tbody.innerHTML=slice.map(r=>`<tr class="border-t border-slate-200"><td class="px-3 py-2 whitespace-nowrap">${fmt(r.date)}</td><td class="px-3 py-2">${escapeHtml(r.desc)||'<span class=\'text-slate-400\'>(No description)</span>'}</td><td class="px-3 py-2">${escapeHtml(r.category)}</td><td class="px-3 py-2">${r.type==='income'?'Income':'Expense'}</td><td class="px-3 py-2 text-right">${fmtAmt(r.amount,r.type)}</td></tr>`).join(''); rowCount.textContent=totalRows; pageInfo.textContent=`Page ${PAGE.index} / ${totalPages}`; prevPage.disabled=PAGE.index<=1; nextPage.disabled=PAGE.index>=totalPages; }
+
+    // ===== Render All =====
+    function renderAll(){ const rows=transformRows(RAW_ROWS); if(!rows.length){ tbody.innerHTML='<tr><td colspan="5" class="px-3 py-3 text-slate-600">No valid rows parsed. Check your headers and that the tab has data.</td></tr>'; kpiIncome.textContent='—'; kpiExpense.textContent='—'; kpiNet.textContent='—'; kpiBalance.textContent='—'; balanceBadge.textContent='—'; alertsBody.innerHTML=''; recsList.innerHTML=''; return; } const kpis=computeKPIs(rows); renderAlerts(rows, kpis); renderCharts(rows); renderTable(rows); }
+
+    // ===== Loaders =====
+    async function loadData({bypassCache=false}={}){
+      const list=getLinks(); if(list.length===0){ toast('Add at least one CSV link.'); return; }
+      RAW_HEADERS=new Set(); RAW_ROWS=[]; loadBtn.disabled=true; loadBtn.textContent='Loading…';
+      try{
+        for(const url of list){ const rows=await fetchCsvSmart(url,{bypassCache}); if(rows&&rows.length){ RAW_ROWS.push(...rows); Object.keys(rows[0]).forEach(h=>RAW_HEADERS.add(h)); } }
+        if(RAW_ROWS.length===0){ toast('Loaded 0 rows. Check link permissions/tab.'); }
+        renderAll(); toast('Data loaded');
+      }catch(e){ console.error(e); alert('Error: '+e.message); }
+      finally{ loadBtn.disabled=false; loadBtn.textContent='Load'; }
+    }
+
+    // ===== Events =====
+    addLinkBtn.addEventListener('click',()=>{ addLink(csvUrl.value); csvUrl.value=''; });
+    loadBtn.addEventListener('click',()=>loadData());
+    refreshBtn.addEventListener('click',()=>loadData({bypassCache:true}));
+    loadSampleBtn.addEventListener('click',()=>{ const sample=`Date,Description,Category,Type,Amount\n2025-01-01,Salary,Job,Income,2500\n2025-01-03,Groceries,Food,Expense,-120.75\n2025-01-05,Freelance,Side,Income,600\n2025-01-07,Electricity,Utilities,Expense,-80.5`; RAW_ROWS=Papa.parse(sample,{header:true}).data; renderAll(); toast('Sample loaded'); });
+    resetBtn.addEventListener('click',()=>{ if(confirm('Clear links, settings, and cache?')){ localStorage.removeItem(LS_KEYS.links); localStorage.removeItem(LS_KEYS.settings); localStorage.removeItem(LS_KEYS.cache); location.reload(); } });
+
+    document.querySelectorAll('th[data-sort]').forEach(th=> th.addEventListener('click', ()=>{ const key=th.getAttribute('data-sort'); if(SORT.key===key) SORT.dir= (SORT.dir==='asc')?'desc':'asc'; else { SORT.key=key; SORT.dir='asc'; } renderAll(); }));
+    prevPage.addEventListener('click', ()=>{ PAGE.index=Math.max(1, PAGE.index-1); renderAll(); });
+    nextPage.addEventListener('click', ()=>{ PAGE.index=PAGE.index+1; renderAll(); });
+
+    saveSettingsBtn.addEventListener('click', ()=>{ SETTINGS.currency=currencySel.value; SETTINGS.locale=localeSel.value; SETTINGS.starting=parseFloat(startingBalanceEl.value||0); SETTINGS.low=parseFloat(lowThresholdEl.value||0); localStorage.setItem(LS_KEYS.settings, JSON.stringify(SETTINGS)); toast('Settings saved'); renderAll(); });
+
+    // ===== Init =====
+    function loadSettings(){ const s=JSON.parse(localStorage.getItem(LS_KEYS.settings)||'null'); if(s) SETTINGS={...SETTINGS,...s}; currencySel.value=SETTINGS.currency; localeSel.value=SETTINGS.locale; startingBalanceEl.value=SETTINGS.starting; lowThresholdEl.value=SETTINGS.low; }
+    function initParams(){ const csv= new URLSearchParams(location.search).get('csv'); if(csv){ csv.split(',').forEach(u=> addLink(decodeURIComponent(u))); } }
+    function escapeHtml(str){ return String(str).replace(/[&<>\"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s])); }
+
+    (function init(){ loadSettings(); renderLinks(); initParams(); })();
+  </script>
 </body>
 </html>
