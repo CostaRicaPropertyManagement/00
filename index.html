@@ -27,7 +27,7 @@
     <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <h1 class="text-2xl font-bold">💰 Income / Outcome Dashboard</h1>
       <div class="flex flex-wrap gap-2 items-center">
-        <input id="csvUrl" type="url" placeholder="Paste Google Sheet link (/edit, /export?format=csv, or /pub?output=csv)" class="border rounded px-3 py-2 w-80"/>
+        <input id="csvUrl" type="url" placeholder="Paste Google Sheet link (/edit, /export?format=csv, /pub?output=csv, or /d/e/.../pubhtml)" class="border rounded px-3 py-2 w-80"/>
         <button id="addLinkBtn" class="btn">Add link</button>
         <button id="loadBtn" class="btn">Load</button>
         <button id="refreshBtn" class="btn">Refresh</button>
@@ -75,6 +75,7 @@
           <label class="text-sm">Low Balance Threshold</label>
           <input id="lowThreshold" type="number" step="0.01" value="100" class="w-full border rounded px-2 py-1"/>
         </div>
+    
         <div class="flex items-end"><button id="saveSettingsBtn" class="btn w-full">Save</button></div>
       </div>
     </section>
@@ -133,6 +134,7 @@
               <th data-sort="category" class="px-3 py-2 text-left cursor-pointer">Category</th>
               <th data-sort="type" class="px-3 py-2 text-left cursor-pointer">Type</th>
               <th data-sort="amount" class="px-3 py-2 text-right cursor-pointer">Amount</th>
+              <th class="px-3 py-2 text-right">New Balance $</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -158,6 +160,9 @@
     let SETTINGS = { currency:'USD', locale: navigator.language||'en-US', starting:0, low:100 };
     let SORT = { key:'date', dir:'desc' };
     let PAGE = { index:1, size:50 };
+
+    // remember running balance per row (computed chronologically)
+    const RB = new Map(); // id -> running balance
 
     // ===== Els =====
     const csvUrl=document.getElementById('csvUrl');
@@ -204,7 +209,28 @@
       const n=parseFloat(s); if(isNaN(n)) return NaN; return neg? -n : n;
     }
 
-    function parseDate(val){ if(!val) return null; const d1=new Date(val); if(!isNaN(d1)) return d1; const m=String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); if(m){ const [,d,mo,y]=m; const yr=y.length===2?2000+parseInt(y):parseInt(y); const dt=new Date(yr,parseInt(mo)-1,parseInt(d)); if(!isNaN(dt)) return dt; } return null; }
+    function parseDate(val){
+      if(!val) return null;
+      // Native first
+      const dNative = new Date(val);
+      if(!isNaN(dNative)) return dNative;
+      const s = String(val).trim();
+      // 1) dd/mm/yyyy or mm/dd/yyyy or dd-mm-yy etc.
+      let m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+      if(m){ const [,a,b,y]=m; const yr=y.length===2?2000+parseInt(y):parseInt(y); const mm=parseInt(b), dd=parseInt(a); const d=new Date(yr,mm-1,dd); if(!isNaN(d)) return d; }
+      // 2) mm/yyyy or yyyy-mm
+      m = s.match(/^(\d{1,2})[\/.-](\d{4})$/);
+      if(m){ const [,mm,yr]=m; const d=new Date(parseInt(yr),parseInt(mm)-1,1); if(!isNaN(d)) return d; }
+      m = s.match(/^(\d{4})-(\d{1,2})$/);
+      if(m){ const [,yr,mm]=m; const d=new Date(parseInt(yr),parseInt(mm)-1,1); if(!isNaN(d)) return d; }
+      // 3) MMM yyyy, e.g., Aug 2025 / August 2025
+      m = s.match(/^([A-Za-z]{3,})\s+(\d{4})$/);
+      if(m){ const [,mon,yr]=m; const d=new Date(`${mon} 1, ${yr}`); if(!isNaN(d)) return d; }
+      // 4) d-MMM-yy, 01-Aug-25
+      m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s](\d{2,4})$/);
+      if(m){ const [,dd,mon,yy]=m; const yr=String(yy).length===2?2000+parseInt(yy):parseInt(yy); const d=new Date(`${mon} ${dd}, ${yr}`); if(!isNaN(d)) return d; }
+      return null;
+    }
 
     function inferType(typeVal, amountVal){ if(typeVal!=null && String(typeVal).trim()!==''){ const v=normalizeHeader(typeVal); if(/income|ingreso|credit|cr|in\b/.test(v)) return 'income'; if(/expense|outcome|egreso|debit|dr|out\b/.test(v)) return 'expense'; } if(typeof amountVal==='number'&&!isNaN(amountVal)) return amountVal<0?'expense':'income'; return 'expense'; }
 
@@ -226,9 +252,14 @@
       try{
         const url=new URL(u);
         if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){
-          const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); const id=m?m[1]:null; if(!id) return u;
-          let gid=null; const hash=(url.hash||'').replace('#',''); const hashParams=new URLSearchParams(hash); if(hashParams.has('gid')) gid=hashParams.get('gid'); if(url.searchParams.has('gid')) gid=url.searchParams.get('gid');
-          const out=new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`); if(gid) out.searchParams.set('gid', gid); return out.toString();
+          // /spreadsheets/d/{id}
+          if(/\/spreadsheets\/d\//.test(url.pathname)){
+            const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); const id=m?m[1]:null; if(id){ let gid=null; const hash=(url.hash||'').replace('#',''); const hashParams=new URLSearchParams(hash); if(hashParams.has('gid')) gid=hashParams.get('gid'); if(url.searchParams.has('gid')) gid=url.searchParams.get('gid'); const out=new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`); if(gid) out.searchParams.set('gid', gid); return out.toString(); }
+          }
+          // /spreadsheets/d/e/.../pubhtml
+          if(/\/spreadsheets\/d\/e\//.test(url.pathname)){
+            return url.toString().replace(/pubhtml.*/,'pub?output=csv');
+          }
         }
         return u;
       }catch{ return u; }
@@ -238,8 +269,21 @@
       try{
         const url=new URL(u);
         if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){
-          const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); const id=m?m[1]:null; let gid=null; const hash=(url.hash||'').replace('#',''); const hp=new URLSearchParams(hash); if(hp.has('gid')) gid=hp.get('gid'); if(url.searchParams.has('gid')) gid=url.searchParams.get('gid');
-          const c=[]; const exp=new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`); if(gid) exp.searchParams.set('gid', gid); c.push(exp.toString()); const pub=new URL(`https://docs.google.com/spreadsheets/d/${id}/pub?output=csv`); if(gid) pub.searchParams.set('gid', gid); c.push(pub.toString()); const gviz=new URL(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`); if(gid) gviz.searchParams.set('gid', gid); c.push(gviz.toString()); return c;
+          const c=[];
+          // /spreadsheets/d/{id}
+          if(/\/spreadsheets\/d\//.test(url.pathname)){
+            const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); const id=m?m[1]:null; let gid=null; const hash=(url.hash||'').replace('#',''); const hp=new URLSearchParams(hash); if(hp.has('gid')) gid=hp.get('gid'); if(url.searchParams.has('gid')) gid=url.searchParams.get('gid');
+            const exp=new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`); if(gid) exp.searchParams.set('gid', gid); c.push(exp.toString());
+            const pub=new URL(`https://docs.google.com/spreadsheets/d/${id}/pub?output=csv`); if(gid) pub.searchParams.set('gid', gid); c.push(pub.toString());
+            const gviz=new URL(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`); if(gid) gviz.searchParams.set('gid', gid); c.push(gviz.toString());
+            return c;
+          }
+          // /spreadsheets/d/e/.../pubhtml
+          if(/\/spreadsheets\/d\/e\//.test(url.pathname)){
+            c.push(url.toString().replace(/pubhtml.*/,'pub?output=csv'));
+            c.push(url.toString().replace(/pubhtml.*/,'gviz/tq?tqx=out:csv'));
+            return c;
+          }
         }
       }catch{}
       return [u];
@@ -267,29 +311,37 @@
     function renderLinks(){ const list=getLinks(); linkList.classList.toggle('hidden', list.length===0); linksUl.innerHTML=list.map(u=>{ const norm=normalizeGsUrl(u); return `<li class="p-2 border border-slate-200 rounded bg-white flex items-center justify-between gap-2"><div class="min-w-0"><div class="truncate text-slate-700">${u}</div><div class="truncate text-xs text-slate-500">Fetch: <code>${norm}</code></div></div><div class="flex gap-2"><a class="btn text-xs" target="_blank" href="${norm}">Test</a><button class="btn text-xs" data-remove="${u}">Remove</button></div></li>`; }).join(''); linksUl.querySelectorAll('button[data-remove]').forEach(b=> b.addEventListener('click', e=> removeLink(e.currentTarget.dataset.remove))); }
 
     // ===== Transform =====
-    function transformRows(raw){ if(!raw||!raw.length) return []; const headers=Object.keys(raw[0]||{}); const kDate=guessHeader(headers,'date'); const kDesc=guessHeader(headers,'desc'); const kCat=guessHeader(headers,'cat'); const kType=guessHeader(headers,'type'); const kAmt=guessHeader(headers,'amt'); const rows=[]; for(const r of raw){ const d=parseDate(r[kDate]); const a=parseAmount(r[kAmt]); if(!d || isNaN(a)) continue; const t=inferType(r[kType], a); rows.push({ date:d, desc:String(r[kDesc]||''), category:String(r[kCat]||'(Uncategorized)'), type:t, amount:Math.abs(a) }); } return rows; }
+    let ROW_ID=0;
+    function transformRows(raw){ if(!raw||!raw.length) return []; const headers=Object.keys(raw[0]||{}); const kDate=guessHeader(headers,'date'); const kDesc=guessHeader(headers,'desc'); const kCat=guessHeader(headers,'cat'); const kType=guessHeader(headers,'type'); const kAmt=guessHeader(headers,'amt'); const rows=[]; for(const r of raw){ const d=parseDate(r[kDate]); const a=parseAmount(r[kAmt]); if(isNaN(a)) continue; const t=inferType(r[kType], a); rows.push({ id:ROW_ID++, date:d||null, desc:String(r[kDesc]||''), category:String(r[kCat]||'(Uncategorized)'), type:t, amount:Math.abs(a) }); } return rows; }
 
     function computeKPIs(rows){ const inc=rows.filter(x=>x.type==='income').reduce((s,x)=>s+x.amount,0); const exp=rows.filter(x=>x.type==='expense').reduce((s,x)=>s+x.amount,0); const bal=SETTINGS.starting + inc - exp; kpiIncome.textContent=fmtCurrency(inc); kpiExpense.textContent=fmtCurrency(exp); kpiNet.textContent=fmtCurrency(inc-exp); kpiBalance.textContent=fmtCurrency(bal); balanceBadge.textContent = bal < SETTINGS.low ? 'LOW' : 'OK'; balanceBadge.style.borderColor = bal < SETTINGS.low ? '#f87171' : '#34d399'; balanceBadge.style.color = bal < SETTINGS.low ? '#b91c1c' : '#065f46'; return {inc,exp,bal}; }
 
+    function computeRunningBalance(rows){
+      RB.clear();
+      let bal=parseFloat(SETTINGS.starting||0);
+      const chrono = rows.slice().sort((a,b)=> (a.date? a.date.getTime():0) - (b.date? b.date.getTime():0));
+      for(const r of chrono){ bal += (r.type==='income'? r.amount : -r.amount); RB.set(r.id, bal); }
+    }
+
     function renderAlerts(rows, kpis){
       const low=parseFloat(SETTINGS.low||0);
-      const sorted=rows.slice().sort((a,b)=>a.date-b.date);
+      const sorted=rows.slice().sort((a,b)=> (a.date? a.date.getTime():0) - (b.date? b.date.getTime():0));
       let bal=parseFloat(SETTINGS.starting||0);
       const events=[];
-      for(const r of sorted){ bal += (r.type==='income'? r.amount : -r.amount); if(bal<low){ events.push({date:r.date, balance:bal, note:`${r.type==='expense'?'Expense':'Income'}: ${r.desc||'(no description)'}`}); } }
+      for(const r of sorted){ bal += (r.type==='income'? r.amount : -r.amount); if(r.date && bal<low){ events.push({date:r.date, balance:bal, note:`${r.type==='expense'?'Expense':'Income'}: ${r.desc||'(no description)'}`}); } }
       alertsBody.innerHTML = events.length ? events.map(e=>`<tr><td class="px-2 py-1">${e.date.toISOString().slice(0,10)}</td><td class="px-2 py-1 text-right">${fmtCurrency(e.balance)}</td><td class="px-2 py-1">${e.note}</td></tr>`).join('') : `<tr><td colspan="3" class="px-2 py-2 text-slate-600">No low-balance events.</td></tr>`;
 
       // 30‑day coverage check
       const today=new Date(); today.setHours(0,0,0,0);
       const in30=new Date(today); in30.setDate(in30.getDate()+30);
-      const upcomingExp = rows.filter(r=> r.type==='expense' && r.date>today && r.date<=in30).reduce((s,x)=>s+x.amount,0);
-      const upcomingInc = rows.filter(r=> r.type==='income' && r.date>today && r.date<=in30).reduce((s,x)=>s+x.amount,0);
+      const upcomingExp = rows.filter(r=> r.type==='expense' && r.date && r.date>today && r.date<=in30).reduce((s,x)=>s+x.amount,0);
+      const upcomingInc = rows.filter(r=> r.type==='income' && r.date && r.date>today && r.date<=in30).reduce((s,x)=>s+x.amount,0);
 
       // If there are no future-dated rows, fallback to simple projection: average daily net from last 60 days
       let projected = kpis.bal + upcomingInc - upcomingExp;
       if(upcomingExp===0 && upcomingInc===0){
         const past60=new Date(today); past60.setDate(past60.getDate()-60);
-        const pastRows=rows.filter(r=> r.date>past60 && r.date<=today);
+        const pastRows=rows.filter(r=> r.date && r.date>past60 && r.date<=today);
         const netPast=pastRows.reduce((s,x)=> s + (x.type==='income'? x.amount : -x.amount), 0);
         const days=Math.max(1, (today - past60)/(1000*60*60*24));
         const avgDaily=netPast/days; // could be negative
@@ -302,8 +354,8 @@
         recs.push(`⚠️ In 30 days you ${projected<0? 'will be negative' : 'may be below your threshold'}: ${fmtCurrency(projected)}.`);
         recs.push(`You need ~${fmtCurrency(gap)} more income or cuts within 30 days to stay above ${fmtCurrency(low)}.`);
         // Target high-impact categories (next 30d if available, else last 30d)
-        const baseRows=(upcomingExp>0? rows.filter(r=> r.type==='expense' && r.date>today && r.date<=in30)
-                                     : rows.filter(r=> r.type==='expense' && r.date>new Date(today-1000*60*60*24*30) && r.date<=today));
+        const baseRows=(upcomingExp>0? rows.filter(r=> r.type==='expense' && r.date && r.date>today && r.date<=in30)
+                                     : rows.filter(r=> r.type==='expense' && r.date && r.date>new Date(today-1000*60*60*24*30) && r.date<=today));
         const byCat={}; baseRows.forEach(r=> byCat[r.category]=(byCat[r.category]||0)+r.amount );
         const topCats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,3);
         if(topCats.length) recs.push(`Trim these categories: ${topCats.map(([c,v])=>`${c} (${fmtCurrency(v)})`).join(', ')}.`);
@@ -323,7 +375,7 @@
     let barChart, pieChart;
     function renderCharts(rows){
       Chart.defaults.color='#0f172a'; Chart.defaults.font.size=13;
-      const buckets={}; for(const r of rows){ const k=monthKey(r.date); if(!buckets[k]) buckets[k]={income:0,expense:0}; buckets[k][r.type]+=r.amount; }
+      const buckets={}; for(const r of rows){ if(!r.date) continue; const k=monthKey(r.date); if(!buckets[k]) buckets[k]={income:0,expense:0}; buckets[k][r.type]+=r.amount; }
       const labels=Object.keys(buckets).sort(); const income=labels.map(k=>buckets[k].income); const expense=labels.map(k=>buckets[k].expense);
       const ctxB=document.getElementById('barChart'); if(barChart) barChart.destroy(); barChart=new Chart(ctxB,{type:'bar',data:{labels,datasets:[{label:'Income',data:income},{label:'Expense',data:expense}]},options:{responsive:true,scales:{x:{ticks:{color:'#0f172a'},grid:{color:'#e2e8f0'}},y:{beginAtZero:true,ticks:{color:'#0f172a'},grid:{color:'#e2e8f0'}}},plugins:{legend:{labels:{color:'#0f172a'}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtCurrency(c.parsed.y)}`}}}}});
       const byCat={}; rows.filter(r=>r.type==='expense').forEach(r=> byCat[r.category]=(byCat[r.category]||0)+r.amount );
@@ -332,12 +384,13 @@
     }
 
     // ===== Table =====
-    function applySort(rows){ const dir=SORT.dir==='asc'?1:-1; return rows.sort((a,b)=>{ const k=SORT.key; if(k==='amount') return (a.amount-b.amount)*dir; if(k==='date') return (a.date-b.date)*dir; const av=(a[k]||'').toString().toLowerCase(); const bv=(b[k]||'').toString().toLowerCase(); return av<bv? -1*dir : av>bv? 1*dir : 0; }); }
+    function applySort(rows){ const dir=SORT.dir==='asc'?1:-1; return rows.sort((a,b)=>{ const k=SORT.key; if(k==='amount') return (a.amount-b.amount)*dir; if(k==='date') return ((a.date? a.date.getTime():0) - (b.date? b.date.getTime():0))*dir; const av=(a[k]||'').toString().toLowerCase(); const bv=(b[k]||'').toString().toLowerCase(); return av<bv? -1*dir : av>bv? 1*dir : 0; }); }
     function paginate(rows){ const total=Math.max(1, Math.ceil(rows.length/PAGE.size)); if(PAGE.index>total) PAGE.index=total; const start=(PAGE.index-1)*PAGE.size; return { slice: rows.slice(start, start+PAGE.size), totalPages: total, totalRows: rows.length }; }
-    function renderTable(rows){ const fmt=d=>d.toISOString().slice(0,10); const fmtAmt=(n,t)=>`${t==='expense'?'-':''}${fmtCurrency(n)}`; const sorted=applySort(rows.slice()); const {slice,totalPages,totalRows}=paginate(sorted); tbody.innerHTML=slice.map(r=>`<tr class="border-t border-slate-200"><td class="px-3 py-2 whitespace-nowrap">${fmt(r.date)}</td><td class="px-3 py-2">${escapeHtml(r.desc)||'<span class=\'text-slate-400\'>(No description)</span>'}</td><td class="px-3 py-2">${escapeHtml(r.category)}</td><td class="px-3 py-2">${r.type==='income'?'Income':'Expense'}</td><td class="px-3 py-2 text-right">${fmtAmt(r.amount,r.type)}</td></tr>`).join(''); rowCount.textContent=totalRows; pageInfo.textContent=`Page ${PAGE.index} / ${totalPages}`; prevPage.disabled=PAGE.index<=1; nextPage.disabled=PAGE.index>=totalPages; }
+    function escapeHtml(str){ return String(str).replace(/[&<>\"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s])); }
+    function renderTable(rows){ const fmt=d=> d? d.toISOString().slice(0,10) : '—'; const fmtAmt=(n,t)=>`${t==='expense'?'-':''}${fmtCurrency(n)}`; const sorted=applySort(rows.slice()); const {slice,totalPages,totalRows}=paginate(sorted); tbody.innerHTML=slice.map(r=>`<tr class="border-t border-slate-200"><td class="px-3 py-2 whitespace-nowrap">${fmt(r.date)}</td><td class="px-3 py-2">${escapeHtml(r.desc)||'<span class=\'text-slate-400\'>(No description)</span>'}</td><td class="px-3 py-2">${escapeHtml(r.category)}</td><td class="px-3 py-2">${r.type==='income'?'Income':'Expense'}</td><td class="px-3 py-2 text-right">${fmtAmt(r.amount,r.type)}</td><td class="px-3 py-2 text-right">${fmtCurrency(RB.get(r.id) ?? SETTINGS.starting)}</td></tr>`).join(''); rowCount.textContent=totalRows; pageInfo.textContent=`Page ${PAGE.index} / ${totalPages}`; prevPage.disabled=PAGE.index<=1; nextPage.disabled=PAGE.index>=totalPages; }
 
     // ===== Render All =====
-    function renderAll(){ const rows=transformRows(RAW_ROWS); if(!rows.length){ tbody.innerHTML='<tr><td colspan="5" class="px-3 py-3 text-slate-600">No valid rows parsed. Check your headers and that the tab has data.</td></tr>'; kpiIncome.textContent='—'; kpiExpense.textContent='—'; kpiNet.textContent='—'; kpiBalance.textContent='—'; balanceBadge.textContent='—'; alertsBody.innerHTML=''; recsList.innerHTML=''; return; } const kpis=computeKPIs(rows); renderAlerts(rows, kpis); renderCharts(rows); renderTable(rows); }
+    function renderAll(){ const rows=transformRows(RAW_ROWS); if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" class="px-3 py-3 text-slate-600">No valid rows parsed. Check your headers and that the tab has data.</td></tr>'; kpiIncome.textContent='—'; kpiExpense.textContent='—'; kpiNet.textContent='—'; kpiBalance.textContent='—'; balanceBadge.textContent='—'; alertsBody.innerHTML=''; recsList.innerHTML=''; return; } const kpis=computeKPIs(rows); computeRunningBalance(rows); renderAlerts(rows, kpis); renderCharts(rows); renderTable(rows); }
 
     // ===== Loaders =====
     async function loadData({bypassCache=false}={}){
@@ -367,7 +420,6 @@
     // ===== Init =====
     function loadSettings(){ const s=JSON.parse(localStorage.getItem(LS_KEYS.settings)||'null'); if(s) SETTINGS={...SETTINGS,...s}; currencySel.value=SETTINGS.currency; localeSel.value=SETTINGS.locale; startingBalanceEl.value=SETTINGS.starting; lowThresholdEl.value=SETTINGS.low; }
     function initParams(){ const csv= new URLSearchParams(location.search).get('csv'); if(csv){ csv.split(',').forEach(u=> addLink(decodeURIComponent(u))); } }
-    function escapeHtml(str){ return String(str).replace(/[&<>\"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[s])); }
 
     (function init(){ loadSettings(); renderLinks(); initParams(); })();
   </script>
