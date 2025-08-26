@@ -55,11 +55,12 @@
           <input id="csvUrl" type="url" placeholder="Paste /edit, /export?format=csv or /pub?output=csv" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white" />
           <p class="text-xs text-slate-500 mt-1">Works with <code>/pub?output=csv</code>, <code>/export?format=csv</code>, or a normal <code>/edit</code> URL (auto‑converted). Also supports multiple links.</p>
         </div>
-        <div class="md:col-span-5 grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div class="md:col-span-5 grid grid-cols-2 md:grid-cols-5 gap-2">
           <button id="addLinkBtn" class="btn brand-bg">Add link</button>
           <button id="loadBtn" class="btn">Load data</button>
           <button id="loadSampleBtn" class="btn">Sample</button>
           <button id="refreshBtn" class="btn">Refresh</button>
+          <button id="testLinkBtn" class="btn">Test link</button>
         </div>
       </div>
       <div id="linkList" class="mt-3 hidden">
@@ -271,6 +272,7 @@
   const refreshBtn = document.getElementById('refreshBtn');
   const linkList = document.getElementById('linkList');
   const linksUl = document.getElementById('linksUl');
+  const testLinkBtn = document.getElementById('testLinkBtn');
 
   const mapDate = document.getElementById('mapDate');
   const mapDesc = document.getElementById('mapDesc');
@@ -317,35 +319,98 @@
   function toast(msg){ const el=document.createElement('div'); el.className='fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-3 py-2 rounded-xl shadow'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),1800); }
   function uniq(arr){ return Array.from(new Set(arr)); }
   function guessHeader(headers, kind){ const candidates=SYNS[kind]; const norm=headers.map(h=>normalizeHeader(h)); for(const syn of candidates){ const idx=norm.findIndex(h=>h===syn||h.includes(syn)); if(idx!==-1) return headers[idx]; } if(kind==='amount'){ return headers.find(h=>/amount|importe|monto|total|value|debit|credit|dr|cr/i.test(h))||headers[0]; } return headers[0]; }
-  function normalizeGsUrl(u){ try{ const url=new URL(u); if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){ if(url.pathname.includes('/pub')) return url.toString(); if(url.pathname.includes('/export')){ url.searchParams.set('format','csv'); return url.toString(); } const m=url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); if(m){ return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv`; } } return u; }catch{return u;} }
-  function parseAmount(val){ if(val==null) return NaN; let s=String(val).trim(); if(!s) return NaN; const neg=/^\(.*\)$/.test(s); s=s.replace(/[()]/g,''); s=s.replace(/[^0-9,.-]/g,''); if(s.includes(',')&&s.includes('.')) s=s.replace(/,/g,''); else if(s.includes(',')&&!s.includes('.')) s=s.replace(/,/g,'.'); const n=parseFloat(s); if(isNaN(n)) return NaN; return neg? -n : n; }
-  function inferType(typeVal, amountVal){ if(typeVal!=null && String(typeVal).trim()!==''){ const v=normalizeHeader(typeVal); if(/income|ingreso|credit|cr|in\b/.test(v)) return 'income'; if(/expense|outcome|egreso|debit|dr|out\b/.test(v)) return 'expense'; } if(typeof amountVal==='number'&&!isNaN(amountVal)) return amountVal<0?'expense':'income'; return 'expense'; }
-  function fmtCurrency(n){ try{ return new Intl.NumberFormat(SETTINGS.locale,{style:'currency',currency:SETTINGS.currency}).format(n);}catch{ return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);} }
-  const monthKey=d=> d.getFullYear()+ '-' + String(d.getMonth()+1).padStart(2,'0');
-  function parseDate(val){ if(!val) return null; const d1=new Date(val); if(!isNaN(d1)) return d1; const m=String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); if(m){ const [_,d,mth,y]=m; const year=y.length===2?(2000+parseInt(y)):parseInt(y); const dt=new Date(year,parseInt(mth)-1,parseInt(d)); if(!isNaN(dt)) return dt; } return null; }
+
+  // ===== URL & CSV helpers =====
+  function normalizeGsUrl(u){
+    try{
+      const url = new URL(u);
+      if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){
+        const m = url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        const id = m ? m[1] : null;
+        if(!id) return u;
+        let gid = null;
+        const hash = (url.hash || '').replace('#','');
+        const hashParams = new URLSearchParams(hash);
+        if(hashParams.has('gid')) gid = hashParams.get('gid');
+        if(url.searchParams.has('gid')) gid = url.searchParams.get('gid');
+        const out = new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`);
+        if(gid) out.searchParams.set('gid', gid);
+        return out.toString();
+      }
+      return u;
+    }catch{ return u; }
+  }
+
+  function buildCsvCandidates(u){
+    try{
+      const url = new URL(u);
+      if(url.hostname.includes('docs.google.com') && url.pathname.includes('/spreadsheets/')){
+        const m = url.pathname.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        const id = m ? m[1] : null;
+        let gid = null;
+        const hash = (url.hash || '').replace('#','');
+        const hp = new URLSearchParams(hash);
+        if(hp.has('gid')) gid = hp.get('gid');
+        if(url.searchParams.has('gid')) gid = url.searchParams.get('gid');
+        const candidates = [];
+        const exp = new URL(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`);
+        if(gid) exp.searchParams.set('gid', gid);
+        candidates.push(exp.toString());
+        const pub = new URL(`https://docs.google.com/spreadsheets/d/${id}/pub?output=csv`);
+        if(gid) pub.searchParams.set('gid', gid);
+        candidates.push(pub.toString());
+        const gviz = new URL(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`);
+        if(gid) gviz.searchParams.set('gid', gid);
+        candidates.push(gviz.toString());
+        return candidates;
+      }
+    }catch{}
+    return [u];
+  }
+
+  // Cache
+  function cacheGet(key){ try{ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); return all[key]; }catch{return undefined;} }
+  function cacheSet(key, value){ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); all[key]=value; localStorage.setItem(LS_KEYS.cache, JSON.stringify(all)); }
+
+  function isProbablyHtml(text, contentType){
+    if(contentType && /text\/html/i.test(contentType)) return true;
+    const head = text.slice(0, 200).toLowerCase();
+    return head.includes('<!doctype html') || head.includes('<html');
+  }
+
+  async function fetchCsvSmart(url, {bypassCache=false}={}){
+    const candidates = buildCsvCandidates(url);
+    let lastErr = null;
+    for(const cand of candidates){
+      const cacheKey='csv:'+cand;
+      try{
+        if(!bypassCache){ const cached=cacheGet(cacheKey); if(cached){ return Papa.parse(cached, {header:true, dynamicTyping:false, skipEmptyLines:true}).data; } }
+        const res=await fetch(cand, {cache:'no-store'});
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text=await res.text();
+        const ct = res.headers.get('content-type') || '';
+        if(isProbablyHtml(text, ct)) throw new Error('HTML returned (sign‑in/permissions). Make the sheet public or Publish→CSV.');
+        if(!/[,\n]/.test(text)) throw new Error('No CSV structure');
+        cacheSet(cacheKey, text);
+        return new Promise((resolve,reject)=> Papa.parse(text,{header:true,dynamicTyping:false,skipEmptyLines:true,complete:r=>resolve(r.data),error:reject}));
+      }catch(e){ lastErr = e; }
+    }
+    throw new Error(`All CSV endpoints failed. Last error: ${lastErr && lastErr.message ? lastErr.message : 'unknown'}`);
+  }
 
   // ===== Links =====
   function getLinks(){ try{ return JSON.parse(localStorage.getItem(LS_KEYS.links)||'[]'); }catch{return [];} }
   function setLinks(list){ localStorage.setItem(LS_KEYS.links, JSON.stringify(list)); renderLinks(); }
   function addLink(url){ const clean=String(url||'').trim(); if(!clean) return; const list=getLinks(); const normalized=normalizeGsUrl(clean); if(!list.includes(normalized)) list.push(normalized); setLinks(list); }
   function removeLink(url){ const list=getLinks().filter(u=>u!==url); setLinks(list); }
-  function renderLinks(){ const list=getLinks(); linkList.classList.toggle('hidden', list.length===0); linksUl.innerHTML=list.map(u=>`<li class="flex items-center justify-between gap-3 p-2 border border-slate-200 rounded-xl bg-white"><a href="${u}" target="_blank" class="truncate text-slate-700 hover:underline flex-1">${u}</a><button data-url="${u}" class="btn text-xs removeLink">Remove</button></li>`).join(''); linksUl.querySelectorAll('.removeLink').forEach(btn=>btn.addEventListener('click',e=>removeLink(e.currentTarget.dataset.url))); }
+  function renderLinks(){ const list=getLinks(); linkList.classList.toggle('hidden', list.length===0); linksUl.innerHTML=list.map(u=>{ const norm=normalizeGsUrl(u); return `<li class="p-2 border border-slate-200 rounded-xl bg-white"><div class="flex items-center justify-between gap-3"><div class="flex-1 min-w-0"><div class="truncate text-slate-700"><span class=\"text-xs text-slate-500\">Original:</span> ${u}</div><div class="truncate text-slate-700"><span class=\"text-xs text-slate-500\">Fetch URL:</span> <code class=\"text-xs\">${norm}</code></div></div><div class="flex items-center gap-2"><a href="${norm}" target="_blank" class="btn text-xs">Test</a><button data-url="${u}" class="btn text-xs removeLink">Remove</button></div></div></li>`; }).join(''); linksUl.querySelectorAll('.removeLink').forEach(btn=>btn.addEventListener('click',e=>removeLink(e.currentTarget.dataset.url))); }
 
-  // ===== Cache =====
-  function cacheGet(key){ try{ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); return all[key]; }catch{return undefined;} }
-  function cacheSet(key, value){ const all=JSON.parse(localStorage.getItem(LS_KEYS.cache)||'{}'); all[key]=value; localStorage.setItem(LS_KEYS.cache, JSON.stringify(all)); }
-
-  async function fetchCsv(url, {bypassCache=false}={}){
-    const cacheKey='csv:'+url;
-    if(!bypassCache){ const cached=cacheGet(cacheKey); if(cached){ return Papa.parse(cached, {header:true, dynamicTyping:false, skipEmptyLines:true}).data; } }
-    const res=await fetch(url, {cache:'no-store'}); if(!res.ok) throw new Error(`Failed to fetch: ${res.status}`); const text=await res.text(); cacheSet(cacheKey, text); return new Promise((resolve,reject)=> Papa.parse(text,{header:true,dynamicTyping:false,skipEmptyLines:true,complete:r=>resolve(r.data),error:reject}));
-  }
-
+  // ===== Load =====
   async function loadData({bypassCache=false}={}){
     const list=getLinks(); if(list.length===0){ toast('Add at least one CSV link.'); return; }
     RAW_HEADERS=new Set(); RAW_ROWS=[]; loadBtn.disabled=true; loadBtn.textContent='Loading…';
     try{
-      for(const url of list){ const rows=await fetchCsv(url,{bypassCache}); if(rows&&rows.length){ RAW_ROWS.push(...rows); Object.keys(rows[0]).forEach(h=>RAW_HEADERS.add(h)); } }
+      for(const url of list){ const rows=await fetchCsvSmart(url,{bypassCache}); if(rows&&rows.length){ RAW_ROWS.push(...rows); Object.keys(rows[0]).forEach(h=>RAW_HEADERS.add(h)); } }
       if(RAW_ROWS.length===0){ toast('No rows found. Check your links or sheet tab.'); return; }
       renderMappingSelectors(); renderAll(); toast('Data loaded.');
     }catch(e){ console.error(e); alert('Error while loading CSVs: '+e.message); }
@@ -358,7 +423,52 @@
   function applyMappingFromUI(){ MAPPING={ date:mapDate.value, desc:mapDesc.value, category:mapCat.value, type:mapType.value, amount:mapAmt.value }; localStorage.setItem(LS_KEYS.mapping, JSON.stringify(MAPPING)); toast('Mapping applied.'); renderAll(); }
   function saveSettings(){ SETTINGS.currency=currencySel.value; SETTINGS.locale=localeSel.value; SETTINGS.rowsPerPage=parseInt(rowsPerPage.value||50,10); SETTINGS.startingBalance=parseFloat(startingBalance.value||0); SETTINGS.lowThreshold=parseFloat(lowThreshold.value||0); SETTINGS.brand=brandColor.value; localStorage.setItem(LS_KEYS.settings, JSON.stringify(SETTINGS)); document.documentElement.style.setProperty('--brand', SETTINGS.brand); toast('Settings saved.'); renderAll(); }
 
-  function transformRows(){ if(!RAW_ROWS.length) return []; const dK=MAPPING.date,deK=MAPPING.desc,cK=MAPPING.category,tK=MAPPING.type,aK=MAPPING.amount; const out=[]; for(const r of RAW_ROWS){ const d=parseDate(r[dK]); const amtRaw=r[aK]; const amt=parseAmount(amtRaw); if(!d||isNaN(amt)) continue; const t=inferType(r[tK], amt); const absAmt=Math.abs(amt); out.push({ date:d, desc:String(r[deK]??'').trim(), category:String(r[cK]??'').trim()||'(Uncategorized)', type:t, amount:absAmt, _raw:r }); } return out; }
+  function parseAmount(val){
+    if(val==null) return NaN;
+    let s=String(val).trim();
+    if(!s) return NaN;
+    const neg=/^\(.*\)$/.test(s);
+    s=s.replace(/[()]/g,'');
+    // Remove currency symbols and spaces
+    s=s.replace(/[^0-9.,-]/g,'');
+    // Dual-separator logic: if both , and . exist, the last separator is decimal
+    if(s.includes(',') && s.includes('.')){
+      if(s.lastIndexOf('.') > s.lastIndexOf(',')){
+        // 2,140.50 -> remove thousands commas
+        s=s.replace(/,/g,'');
+      } else {
+        // 2.140,50 -> remove thousand dots and swap comma to decimal
+        s=s.replace(/\./g,'').replace(',', '.');
+      }
+    } else if(s.includes(',')){
+      // Only commas: decide if decimal or thousands
+      const parts=s.split(',');
+      if(parts[parts.length-1].length<=2){
+        // decimal comma
+        s=s.replace(/,/g, (m, i)=> i===s.lastIndexOf(',')?'.':'' );
+        s=s.replace(/,(?=\d{3}(\D|$))/g,''); // cleanup any remaining thousands commas
+        s=s.replace(/,/g,'');
+      } else {
+        // thousands commas
+        s=s.replace(/,/g,'');
+      }
+    } else if(s.includes('.')){
+      // Only dots: could be thousands or decimal
+      const parts=s.split('.');
+      if(parts.length>2 && parts[parts.length-1].length===3){
+        // 1.234.567 pattern -> thousands
+        s=s.replace(/\./g,'');
+      } // else treat dot as decimal
+    }
+    const n=parseFloat(s);
+    if(isNaN(n)) return NaN;
+    return neg? -n : n;
+  }
+
+  function inferType(typeVal, amountVal){ if(typeVal!=null && String(typeVal).trim()!==''){ const v=normalizeHeader(typeVal); if(/income|ingreso|credit|cr|in\b/.test(v)) return 'income'; if(/expense|outcome|egreso|debit|dr|out\b/.test(v)) return 'expense'; } if(typeof amountVal==='number'&&!isNaN(amountVal)) return amountVal<0?'expense':'income'; return 'expense'; }
+  function fmtCurrency(n){ try{ return new Intl.NumberFormat(SETTINGS.locale,{style:'currency',currency:SETTINGS.currency}).format(n);}catch{ return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);} }
+  const monthKey=d=> d.getFullYear()+ '-' + String(d.getMonth()+1).padStart(2,'0');
+  function parseDate(val){ if(!val) return null; const d1=new Date(val); if(!isNaN(d1)) return d1; const m=String(val).match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/); if(m){ const [_,d,mth,y]=m; const year=y.length===2?(2000+parseInt(y)):parseInt(y); const dt=new Date(year,parseInt(mth)-1,parseInt(d)); if(!isNaN(dt)) return dt; } return null; }
 
   // ===== Filter/Sort/Paginate =====
   function applyFilters(rows){ let res=rows.slice(); if(FILTERS.from){ const f=new Date(FILTERS.from); res=res.filter(x=>x.date>=f); } if(FILTERS.to){ const t=new Date(FILTERS.to); t.setHours(23,59,59,999); res=res.filter(x=>x.date<=t); } if(FILTERS.type!=='all') res=res.filter(x=>x.type===FILTERS.type); if(FILTERS.category!=='all') res=res.filter(x=>x.category===FILTERS.category); if(FILTERS.search){ const q=FILTERS.search.toLowerCase(); res=res.filter(x=> (x.desc.toLowerCase().includes(q) || x.category.toLowerCase().includes(q)) ); } return res; }
@@ -385,6 +495,7 @@
   addLinkBtn.addEventListener('click', ()=>{ addLink(csvUrl.value); csvUrl.value=''; });
   loadBtn.addEventListener('click', ()=>loadData());
   refreshBtn.addEventListener('click', ()=>loadData({bypassCache:true}));
+  testLinkBtn.addEventListener('click', ()=>{ const raw=csvUrl.value.trim(); if(!raw){ toast('Paste a Google Sheet link first.'); return; } const norm=normalizeGsUrl(raw); const alts=buildCsvCandidates(raw); console.log('Normalized:', norm, '\nCandidates:', alts); window.open(norm,'_blank'); });
   loadSampleBtn.addEventListener('click', ()=>{ const sample=`Date,Description,Category,Type,Amount\n2025-01-01,Salary Payment,Job Income,Income,2500\n2025-01-03,Grocery Store,Food,Expense,-120.75\n2025-01-05,Freelance Project,Side Hustle,Income,600\n2025-01-07,Electricity Bill,Utilities,Expense,-80.5\n2025-01-10,Coffee Shop,Food,Expense,-15\n2025-01-12,Stock Dividend,Investment,Income,45.3`; RAW_HEADERS=new Set(['Date','Description','Category','Type','Amount']); RAW_ROWS=Papa.parse(sample,{header:true}).data; renderMappingSelectors(); renderAll(); toast('Loaded sample data.'); });
   remapBtn.addEventListener('click', renderMappingSelectors);
   saveSettingsBtn.addEventListener('click', saveSettings);
